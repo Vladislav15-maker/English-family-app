@@ -40,15 +40,20 @@ export default function StudentDashboardPage() {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
     }
+  }, [studentData]); 
+
+  useEffect(() => {
     if (user) {
-      const messages = getMockMessages(user.id, user.role);
-      const currentUnread = messages.filter(msg => !msg.isRead && (msg.recipientId === user.id || (msg.recipientId === 'all_students' && user.role === 'student'))).length;
-      setUnreadMessagesCount(currentUnread);
+        const messages = getMockMessages(user.id, user.role);
+        const currentUnread = messages.filter(msg => !msg.isRead && (msg.recipientId === user.id || (msg.recipientId === 'all_students' && user.role === 'student'))).length;
+        setUnreadMessagesCount(currentUnread);
+    } else {
+        setUnreadMessagesCount(0);
     }
-  }, [studentData, user]); 
+  }, [user]);
 
    useEffect(() => {
-    if (!studentData) return;
+    if (!studentData) return; // Ensure studentData is loaded
 
     const interval = setInterval(() => {
       // Log the current state of mockUnitTests as seen by this interval
@@ -63,10 +68,11 @@ export default function StudentDashboardPage() {
       if (relevantTest) {
         console.log("[Student Dashboard Interval Check] Relevant test found:", {id: relevantTest.id, status: relevantTest.status, title: relevantTest.title});
         setActiveTestNotification(prev => {
+            // Create a new object to ensure React detects the change if relevantTest content changed
             if(prev?.id !== relevantTest.id || prev?.status !== relevantTest.status){
-                return {...relevantTest}; // Create a new object
+                return {...relevantTest};
             }
-            return prev; // Keep existing object if no change to relevant properties
+            return prev;
         });
       } else {
         console.log("[Student Dashboard Interval Check] No relevant test found with status waiting_room_open or active.");
@@ -78,26 +84,23 @@ export default function StudentDashboardPage() {
       console.log("[Student Dashboard] Clearing test check interval.");
       clearInterval(interval);
     };
-  }, [studentData]); 
+  }, [studentData]); // Rerun if studentData changes
 
 
   const simulateTeacherOpensWaitingRoom = () => {
     if (!studentData) return;
-    // Find a test that is 'pending' and relevant to this student
     const pendingTestIndex = mockUnitTests.findIndex(test => 
         test.status === 'pending' && 
         (!test.forStudentId || test.forStudentId === studentData.id) &&
-        (!test.forGroupId) // Assuming no group logic for now
+        (!test.forGroupId) 
     );
 
     if (pendingTestIndex !== -1) {
       mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
-      // The interval useEffect should pick this up and update activeTestNotification
-      toast({ title: "Waiting Room Open (Simulated)!", description: `Test "${mockUnitTests[pendingTestIndex].title}" is now open for joining.`});
+      toast({ title: "Waiting Room Now Open (Simulated)", description: `Test "${mockUnitTests[pendingTestIndex].title}" is ready to join.`});
       console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
-      console.log('[Simulate] Current mockUnitTests:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
     } else {
-      toast({ title: "No Pending Test", description: "No suitable pending test found for simulation.", variant: "default" });
+      toast({ title: "No Pending Test Found", description: "Could not find a 'pending' test to open for simulation.", variant: "default" });
     }
   };
   
@@ -111,16 +114,14 @@ export default function StudentDashboardPage() {
      if (waitingTestIndex !== -1) {
         mockUnitTests[waitingTestIndex].status = 'active';
         mockUnitTests[waitingTestIndex].startTime = new Date();
-        // The interval useEffect should pick this up
-        toast({ title: "Test Active (Simulated)!", description: `Test "${mockUnitTests[waitingTestIndex].title}" is now active.`});
+        toast({ title: "Test Now Active (Simulated)", description: `Test "${mockUnitTests[waitingTestIndex].title}" has started.`});
         console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
-        console.log('[Simulate] Current mockUnitTests:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
      } else {
         const activeTest = mockUnitTests.find(test => test.status === 'active' && (!test.forStudentId || test.forStudentId === studentData.id));
         if(activeTest) {
-            toast({ title: "Test Already Active", description: `Test "${activeTest.title}" is active.`});
+            toast({ title: "Test Already Active", description: `Test "${activeTest.title}" is currently active.`});
         } else {
-            toast({ title: "No Test in Waiting Room", description: "No test is currently in 'waiting_room_open' state for simulation.", variant: "default" });
+            toast({ title: "No Test in Waiting Room", description: "No test found in 'waiting_room_open' state for simulation.", variant: "default" });
         }
      }
   };
@@ -143,14 +144,13 @@ export default function StudentDashboardPage() {
 
     if (activeTestNotification.status === 'waiting_room_open') {
       title = "Test Waiting Room Open!";
-      description = `Your teacher has opened the waiting room for the test: ${activeTestNotification.title}.`;
+      description = `The waiting room for "${activeTestNotification.title}" is now open.`;
       buttonText = "Join Waiting Room";
       buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
       icon = <Hourglass className="h-5 w-5 text-primary animate-pulse" />;
     } else if (activeTestNotification.status === 'active') {
       title = "Test In Progress!";
-      description = `The test "${activeTestNotification.title}" is currently active.`;
-      // If student is already in waiting room, they get redirected. If not, they can join active test via waiting page first.
+      description = `"${activeTestNotification.title}" is currently active.`;
       buttonText = "Go to Test"; 
       buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); 
       icon = <PlayCircle className="h-5 w-5 text-green-500" />;
@@ -160,9 +160,9 @@ export default function StudentDashboardPage() {
 
     return (
       <Alert className="mb-6 border-primary shadow-lg">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3"> {/* Changed to items-start for better alignment with multi-line text */}
             {icon}
-            <div>
+            <div className="flex-1"> {/* Added flex-1 to allow text to take available space */}
                 <AlertTitle className="font-headline text-lg text-primary">{title}</AlertTitle>
                 <AlertDescription className="text-foreground text-sm">
                 {description}
@@ -171,7 +171,7 @@ export default function StudentDashboardPage() {
         </div>
         <Button 
             onClick={buttonAction} 
-            className="mt-3 w-full sm:w-auto"
+            className="mt-3 w-full sm:w-auto ml-auto block sm:ml-0 sm:inline-block" /* Positioning improvements */
             size="sm"
         >
             {buttonText}
@@ -195,13 +195,13 @@ export default function StudentDashboardPage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
             <Button onClick={simulateTeacherOpensWaitingRoom} variant="outline" size="sm">
-                Simulate Teacher Opens Waiting Room (for a 'pending' test)
+                Simulate: Teacher Opens Waiting Room (for a 'pending' test)
             </Button>
             <Button onClick={simulateTeacherStartsActiveTestFromWaitingRoom} variant="outline" size="sm">
-                Simulate Teacher Starts Active Test (from 'waiting_room_open')
+                Simulate: Teacher Starts Active Test (from 'waiting_room_open')
             </Button>
             <p className="text-xs text-muted-foreground mt-2 w-full">
-                These buttons simulate teacher actions for testing notifications. They affect the first suitable test.
+                These buttons simulate teacher actions to test notifications without teacher login. They affect the first suitable test in `mockUnitTests`.
             </p>
         </CardContent>
       </Card>
@@ -298,6 +298,8 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+
 
 
     

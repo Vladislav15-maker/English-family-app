@@ -20,23 +20,23 @@ export default function TeacherDashboardPage() {
   const [aggregatedProgress, setAggregatedProgress] = useState<AggregatedProgress | null>(null);
 
   useEffect(() => {
-    if (teacherData) {
-      let totalCompletion = 0;
-      let studentsWithProgress = 0;
-      mockStudents.forEach(student => {
-        const summary = getOverallStudentProgress(student.id);
-        if (summary.overallAverageCompletion > 0) {
-          totalCompletion += summary.overallAverageCompletion;
-          studentsWithProgress++;
-        }
-      });
-      setAggregatedProgress({
-        averageCompletion: studentsWithProgress > 0 ? totalCompletion / studentsWithProgress : 0,
-        activeStudents: mockStudents.length, 
-        testsConducted: mockUnitTests.filter(t => t.status === 'completed').length, 
-      });
-    }
-  }, [teacherData]);
+    if (!teacherData) return; // Ensure teacherData is loaded
+
+    let totalCompletion = 0;
+    let studentsWithProgress = 0;
+    mockStudents.forEach(student => {
+      const summary = getOverallStudentProgress(student.id);
+      if (summary.overallAverageCompletion > 0) { // Consider only students who have started
+        totalCompletion += summary.overallAverageCompletion;
+        studentsWithProgress++;
+      }
+    });
+    setAggregatedProgress({
+      averageCompletion: studentsWithProgress > 0 ? totalCompletion / studentsWithProgress : 0,
+      activeStudents: mockStudents.length, // Total enrolled students
+      testsConducted: mockUnitTests.filter(t => t.status === 'completed').length, 
+    });
+  }, [teacherData]); // Rerun if teacherData changes
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
@@ -63,8 +63,8 @@ export default function TeacherDashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-semibold text-accent">{aggregatedProgress?.averageCompletion.toFixed(0) ?? 0}%</p>
-            <p className="text-sm text-muted-foreground">average completion</p>
-             <Link href="/teacher/students"><Button variant="link" className="p-0 h-auto mt-1">View Details</Button></Link>
+            <p className="text-sm text-muted-foreground">average completion (active students)</p>
+             <Link href="/statistics"><Button variant="link" className="p-0 h-auto mt-1">View Detailed Statistics</Button></Link>
           </CardContent>
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -124,4 +124,6 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
+
+
 

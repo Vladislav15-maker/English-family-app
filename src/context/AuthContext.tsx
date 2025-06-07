@@ -31,8 +31,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const parsedUser = JSON.parse(storedUser) as User;
         setUser(parsedUser);
       } catch (error) {
-        console.error("Failed to parse stored user:", error);
+        console.error("Failed to parse stored user, removing corrupted data:", error);
         localStorage.removeItem('linguaFamiliaUser');
+        setUser(null); // Ensure user state is cleared if parsing fails
       }
     }
     setIsLoading(false);
@@ -90,3 +91,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
