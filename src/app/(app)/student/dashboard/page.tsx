@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
@@ -6,12 +5,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
-import type { Unit, UnitTest } from '@/types';
+import type { Unit, UnitTest, Message } from '@/types';
 import Image from 'next/image';
 import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, Users, MessageCircle, AlertTriangle, Info } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
-import { mockStudents, mockUnitTests } from '@/lib/mock-data';
+import { mockStudents, mockUnitTests, getMockMessages } from '@/lib/mock-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRouter } from 'next/navigation';
 
@@ -21,7 +20,6 @@ const isUnitActuallyLocked = (unit: Unit): boolean => {
   const today = new Date();
   today.setHours(0,0,0,0); // Compare dates only
   
-  // Check if unit unlock date is in the future OR if it's today but before 6 PM
   const unitUnlockDateTime = new Date(unit.unlockDate);
   unitUnlockDateTime.setHours(18,0,0,0); // Set to 6 PM on unlock day
 
@@ -30,22 +28,26 @@ const isUnitActuallyLocked = (unit: Unit): boolean => {
 
 
 export default function StudentDashboardPage() {
-  const { studentData } = useAuth();
+  const { studentData, user } = useAuth(); // Added user for messages
   const router = useRouter();
   const [progressSummary, setProgressSummary] = useState<StudentProgressSummary | null>(null);
   const [activeTestNotification, setActiveTestNotification] = useState<UnitTest | null>(null);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   useEffect(() => {
     if (studentData) {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
     }
-  }, [studentData]);
+    if (user) {
+      const messages = getMockMessages(user.id, user.role);
+      setUnreadMessagesCount(messages.filter(msg => !msg.isRead && msg.recipientId === user.id).length);
+    }
+  }, [studentData, user]);
 
   // Mock function to simulate teacher starting a test
   const simulateTeacherStartsTest = () => {
-    // Find an active test from mock data that isn't completed by this student
-    const availableTest = mockUnitTests.find(test => test.status === 'active' /* && check if student hasn't completed it */);
+    const availableTest = mockUnitTests.find(test => test.status === 'active' );
     if (availableTest) {
       setActiveTestNotification(availableTest);
     } else {
@@ -81,7 +83,6 @@ export default function StudentDashboardPage() {
         </Alert>
       )}
 
-      {/* For Demo: Button to simulate teacher starting a test */}
       <Card className="mb-8 shadow-md">
         <CardHeader>
             <CardTitle className="text-lg font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent"/>Developer Actions</CardTitle>
@@ -131,7 +132,7 @@ export default function StudentDashboardPage() {
             <CardTitle className="flex items-center gap-2 font-headline"><MessageCircle className="text-secondary-foreground"/> Messages</CardTitle>
           </CardHeader>
           <CardContent>
-             <p className="text-2xl font-semibold text-secondary-foreground">3</p> {/* Mock data */}
+             <p className="text-2xl font-semibold text-secondary-foreground">{unreadMessagesCount}</p>
              <Link href="/messages"><Button variant="link" className="p-0 h-auto">View Messages</Button></Link>
           </CardContent>
         </Card>
@@ -188,5 +189,6 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
 
     

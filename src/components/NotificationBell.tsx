@@ -15,7 +15,7 @@ import Link from 'next/link';
 import type { Message } from '@/types';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { getMockMessages } from '@/lib/mock-data'; // Assuming you'll create this
+import { getMockMessages } from '@/lib/mock-data'; 
 
 export function NotificationBell() {
   const { user } = useAuth();
@@ -24,19 +24,25 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (user) {
-      // Simulate fetching notifications
       const fetchedMessages = getMockMessages(user.id, user.role);
-      setNotifications(fetchedMessages.slice(0, 5)); // Show latest 5
-      setUnreadCount(fetchedMessages.filter(msg => !msg.isRead).length);
+      // Filter for messages addressed to the user (not announcements seen by students unless they are the recipient)
+      // and group messages if the user is a teacher and recipient is 'all_students'
+      const relevantMessages = fetchedMessages.filter(msg => 
+        msg.recipientId === user.id || (user.role === 'teacher' && msg.recipientId === 'all_students')
+      );
+
+      setNotifications(relevantMessages.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5)); 
+      setUnreadCount(relevantMessages.filter(msg => !msg.isRead).length);
     }
   }, [user]);
 
-  // In a real app, you'd mark as read on interaction
+
   const handleOpenChange = (open: boolean) => {
     if(open && unreadCount > 0) {
-      // Simulate marking as read
-      // setUnreadCount(0);
-      // This would ideally trigger an API call
+      // In a real app, you'd mark as read on interaction or when messages page is visited.
+      // For now, this simulation only clears the badge visually on open.
+      // setUnreadCount(0); 
+      // To truly mark as read, an API call and state update in mockMessages would be needed.
     }
   }
 
@@ -62,9 +68,11 @@ export function NotificationBell() {
             <DropdownMenuItem key={notification.id} asChild>
               <Link href="/messages" className="cursor-pointer">
                 <div className="flex flex-col">
-                  <p className="text-sm font-medium">{notification.senderName || "System"}</p>
+                  <p className="text-sm font-medium">
+                    {notification.senderId === 'all_students' ? 'Announcement' : notification.senderName}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">{notification.content}</p>
-                  <p className="text-xs text-muted-foreground self-end">{new Date(notification.timestamp).toLocaleTimeString()}</p>
+                  <p className="text-xs text-muted-foreground self-end">{new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
               </Link>
             </DropdownMenuItem>

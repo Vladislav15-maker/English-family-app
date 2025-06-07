@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getVocabRoundById, getUnitById } from '@/lib/course-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, CheckCircle, Lightbulb, RefreshCw, XCircle, Play, Eye, Volume2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Lightbulb, RefreshCw, XCircle, Play, Eye } from 'lucide-react';
 import type { Word, PracticeSessionState, StudentAnswer } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { updateStudentRoundProgress, getStudentRoundProgress } from '@/lib/progress-utils';
@@ -36,148 +36,18 @@ export default function VocabularyPracticePage() {
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
-  const [voicesLoaded, setVoicesLoaded] = useState(false);
-  const [isSpeakingAllowed, setIsSpeakingAllowed] = useState(false);
-  const mountedRef = useRef(false); // To track component mount state
+  const mountedRef = useRef(false); 
 
   const unit = getUnitById(unitId);
   const vocabRound = getVocabRoundById(unitId, roundId);
 
   useEffect(() => {
-    mountedRef.current = true; // Component did mount
-
-    if (!('speechSynthesis' in window)) {
-      toast({
-        title: "Функция не поддерживается",
-        description: "Ваш браузер не поддерживает синтез речи. Озвучка слов будет недоступна.",
-        variant: "destructive",
-      });
-      console.error("Speech synthesis not supported on mount.");
-      setIsSpeakingAllowed(false);
-      setVoicesLoaded(true); // Consider voices "loaded" in the sense that we know they aren't available
-      return () => { mountedRef.current = false; }; 
-    }
-    
-    let voiceRetryTimeout: NodeJS.Timeout | null = null;
-
-    const loadVoices = () => {
-      if (!mountedRef.current) return; // Don't do anything if unmounted
-
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        console.log("Voices changed/loaded by event:", voices);
-        setVoicesLoaded(true);
-        setIsSpeakingAllowed(true); 
-        console.log("Voices are now loaded.");
-        if(voiceRetryTimeout) clearTimeout(voiceRetryTimeout);
-      } else {
-        console.warn("voiceschanged event fired, but no voices available yet or getVoices() returned empty.");
-        if (voiceRetryTimeout) clearTimeout(voiceRetryTimeout); // Clear previous before setting new
-        if (mountedRef.current) { // Check again before setting timeout
-            voiceRetryTimeout = setTimeout(loadVoices, 250); 
-        }
-      }
-    };
-    
-    const initialVoices = window.speechSynthesis.getVoices();
-    if (initialVoices.length > 0) {
-      console.log("Initial voices already available:", initialVoices);
-      setVoicesLoaded(true);
-      setIsSpeakingAllowed(true);
-    } else {
-      console.log("Initially no voices, attaching voiceschanged listener and attempting to load.");
-      window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-      loadVoices(); 
-    }
-
+    mountedRef.current = true;
     return () => {
-      mountedRef.current = false; // Component will unmount
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-        window.speechSynthesis.cancel(); 
-        if(voiceRetryTimeout) clearTimeout(voiceRetryTimeout);
-      }
+      mountedRef.current = false;
     };
-  }, [toast]);
+  }, []);
 
-
-  const speakWord = useCallback((text: string, lang: string = 'en-US') => {
-    if (!('speechSynthesis' in window) || !window.speechSynthesis) {
-      toast({
-        title: "Функция не поддерживается",
-        description: "Ваш браузер не поддерживает синтез речи.",
-        variant: "destructive",
-      });
-      console.error("Speech synthesis not supported or not available at speakWord call.");
-      return;
-    }
-
-    if (!voicesLoaded) {
-      toast({
-        title: "Голоса загружаются",
-        description: "Пожалуйста, подождите немного и попробуйте снова.",
-        variant: "default",
-      });
-      console.warn("Attempted to speak before voices fully loaded or if loading failed.");
-      window.speechSynthesis.getVoices();
-      return;
-    }
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang; 
-
-    const allVoices = window.speechSynthesis.getVoices();
-    console.log("Available voices at speakWord call:", allVoices); 
-
-    let chosenVoice = allVoices.find(voice => voice.lang === 'en-US' && voice.default);
-    if (!chosenVoice) chosenVoice = allVoices.find(voice => voice.lang.startsWith('en-') && voice.default);
-    if (!chosenVoice) chosenVoice = allVoices.find(voice => voice.lang === 'en-US');
-    if (!chosenVoice) chosenVoice = allVoices.find(voice => voice.lang.startsWith('en-'));
-    if (!chosenVoice && allVoices.length > 0) chosenVoice = allVoices.find(voice => voice.lang === lang);
-
-    if (chosenVoice) {
-      utterance.voice = chosenVoice;
-      console.log("Using voice:", chosenVoice.name, chosenVoice.lang);
-    } else if (allVoices.length > 0) {
-      console.warn(`No specific English voice found for lang '${lang}'. Using browser default for this language if available.`);
-    } else {
-      console.warn("No voices available at all. Speech might not work.");
-       toast({
-        title: "Нет доступных голосов",
-        description: "Не удалось найти голоса для озвучки.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    utterance.onstart = () => console.log(`Speech started for: "${text}"`);
-    utterance.onend = () => console.log(`Speech finished for: "${text}"`);
-    utterance.onerror = (event) => {
-      const errorEvent = event as SpeechSynthesisErrorEvent;
-      const errorDetails = errorEvent.error || 'unknown error';
-      console.error("SpeechSynthesisUtterance.onerror", errorEvent, "Error code:", errorDetails);
-      if (mountedRef.current) { // Only toast if component is still mounted
-        toast({
-          title: "Ошибка озвучки",
-          description: `Не удалось воспроизвести звук. Код ошибки: ${errorDetails}.`,
-          variant: "destructive",
-        });
-      }
-    };
-    
-    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-        console.warn("Speech synthesis is already speaking or pending. Cancelling previous utterances.");
-        window.speechSynthesis.cancel(); 
-        setTimeout(() => {
-            if (mountedRef.current) { // Check if component is still mounted
-                window.speechSynthesis.speak(utterance);
-            }
-        }, 100); 
-    } else {
-        window.speechSynthesis.speak(utterance);
-    }
-
-  }, [toast, voicesLoaded]);
 
   useEffect(() => {
     if (mode === 'practice' && vocabRound && vocabRound.words.length > 0) {
@@ -209,7 +79,7 @@ export default function VocabularyPracticePage() {
     setFeedback(isCorrect ? 'correct' : 'incorrect');
     
     setTimeout(() => {
-      if (!mountedRef.current) return; // Don't proceed if unmounted
+      if (!mountedRef.current) return; 
       setFeedback(null);
       setCurrentAnswer(''); 
 
@@ -248,7 +118,7 @@ export default function VocabularyPracticePage() {
   };
 
   const useHint = () => {
-    if (!currentWord || !isSpeakingAllowed) return;
+    if (!currentWord) return;
     if (studentData.hintsRemaining <= session.hintsUsedThisSession) {
       toast({
         title: "No Hints Available",
@@ -260,21 +130,7 @@ export default function VocabularyPracticePage() {
     
     toast({
       title: "Hint Used",
-      description: (
-        <div className="flex items-center">
-          Correct answer is: {currentWord.english}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-6 w-6 ml-1" 
-            onClick={(e) => { e.stopPropagation(); speakWord(currentWord.english); }}
-            aria-label="Play audio for hinted word"
-            disabled={!isSpeakingAllowed}
-          >
-            <Volume2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      description: `Correct answer is: ${currentWord.english}`,
     });
     setSession(prev => ({ ...prev, hintsUsedThisSession: prev.hintsUsedThisSession + 1 }));
   };
@@ -317,8 +173,6 @@ export default function VocabularyPracticePage() {
               Обзор слов: {vocabRound.title}
             </CardTitle>
             <CardDescription className="text-center">{unit.title} - {vocabRound.words.length} слов. Просмотрите слова перед практикой.
-            {!voicesLoaded && <span className="block text-orange-500 text-xs mt-1">Загрузка аудиосистемы...</span>}
-            {voicesLoaded && !isSpeakingAllowed && <span className="block text-red-500 text-xs mt-1">Озвучка слов недоступна в вашем браузере.</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -329,9 +183,6 @@ export default function VocabularyPracticePage() {
                     <p className="text-lg font-semibold text-primary">{word.russian}</p>
                     <div className="flex items-center">
                         <p className="text-md text-foreground mr-2">Английский: {word.english}</p>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!isSpeakingAllowed}>
-                            <Volume2 className="h-4 w-4" />
-                        </Button>
                     </div>
                     <p className="text-sm text-muted-foreground">Произношение: {word.transcription}</p>
                   </Card>
@@ -340,8 +191,8 @@ export default function VocabularyPracticePage() {
             </ScrollArea>
           </CardContent>
           <CardFooter className="flex justify-center">
-            <Button onClick={startPractice} size="lg" disabled={!isSpeakingAllowed}>
-              <Play className="mr-2 h-5 w-5" /> {isSpeakingAllowed ? "Начать практику" : (voicesLoaded ? "Аудио недоступно" : "Загрузка аудио...")}
+            <Button onClick={startPractice} size="lg">
+              <Play className="mr-2 h-5 w-5" /> Начать практику
             </Button>
           </CardFooter>
         </Card>
@@ -378,9 +229,6 @@ export default function VocabularyPracticePage() {
                             {!isCorrect && <span className="text-xs text-red-700 dark:text-red-400"> (Correct: {word.english})</span>}
                         </div>
                         <div className="flex items-center flex-shrink-0">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!isSpeakingAllowed}>
-                                <Volume2 className="h-4 w-4" />
-                            </Button>
                             {isCorrect ? <CheckCircle className="text-green-500 h-5 w-5" /> : <XCircle className="text-red-500 h-5 w-5" />}
                         </div>
                     </div>
@@ -415,8 +263,6 @@ export default function VocabularyPracticePage() {
         <CardHeader>
           <CardTitle className="text-2xl font-headline text-center">{unit.title} - Vocabulary: {vocabRound.title}</CardTitle>
           <CardDescription className="text-center">Translate the Russian word into English.
-            {!voicesLoaded && <span className="block text-orange-500 text-xs mt-1">Загрузка аудиосистемы...</span>}
-            {voicesLoaded && !isSpeakingAllowed && <span className="block text-red-500 text-xs mt-1">Озвучка слов недоступна в вашем браузере.</span>}
           </CardDescription>
            <Progress value={progressPercentage} className="w-full h-2 mt-2" />
            <p className="text-xs text-muted-foreground text-center mt-1">Word {session.currentQuestionIndex + 1} of {words.length}</p>
@@ -438,9 +284,6 @@ export default function VocabularyPracticePage() {
               {feedback === 'correct' && currentWord && (
                 <div className="flex items-center justify-center text-green-500 mt-3 font-semibold">
                     <p>Correct!</p>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!isSpeakingAllowed}>
-                        <Volume2 className="h-4 w-4" />
-                    </Button>
                 </div>
               )}
               {feedback === 'incorrect' && currentWord && (
@@ -448,9 +291,6 @@ export default function VocabularyPracticePage() {
                     <p>Incorrect.</p>
                     <div className="flex items-center">
                         <p className="mr-1">Correct: {currentWord.english}</p>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!isSpeakingAllowed}>
-                            <Volume2 className="h-4 w-4" />
-                        </Button>
                     </div>
                 </div>
               )}
@@ -464,7 +304,7 @@ export default function VocabularyPracticePage() {
             onClick={useHint} 
             variant="outline" 
             size="sm"
-            disabled={!!feedback || !currentWord || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5 || !isSpeakingAllowed}
+            disabled={!!feedback || !currentWord || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5}
             aria-label={`Use hint, ${Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left`}
           >
             <Lightbulb className="mr-2 h-4 w-4" /> Hint ({Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left)
