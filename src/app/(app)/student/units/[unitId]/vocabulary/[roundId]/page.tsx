@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getVocabRoundById, getUnitById } from '@/lib/course-data';
@@ -15,29 +15,6 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 type VocabPracticeMode = 'review' | 'practice' | 'results';
-
-// Helper function to speak text using Web Speech API
-const speakWord = (text: string, lang: string = 'en-US') => {
-  if ('speechSynthesis' in window) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    // Attempt to find a suitable English voice
-    const voices = window.speechSynthesis.getVoices();
-    const englishVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('Google') || voice.default));
-    if (englishVoice) {
-      utterance.voice = englishVoice;
-    }
-    window.speechSynthesis.speak(utterance);
-  } else {
-    // Fallback for browsers that don't support speechSynthesis
-    // The toast is part of the component, so it will be available.
-    // We handle the alert directly in the component.
-    console.warn("Speech synthesis not supported by this browser.");
-    // Consider using a toast here if this function is called from within the component's scope
-    // toast({ title: "Speech Error", description: "Your browser does not support speech synthesis.", variant: "destructive" });
-  }
-};
-
 
 export default function VocabularyPracticePage() {
   const params = useParams();
@@ -63,6 +40,107 @@ export default function VocabularyPracticePage() {
   const unit = getUnitById(unitId);
   const vocabRound = getVocabRoundById(unitId, roundId);
 
+  const speakWord = useCallback((text: string, lang: string = 'en-US') => {
+    if (!('speechSynthesis' in window)) {
+      toast({
+        title: "Функция не поддерживается",
+        description: "Ваш браузер не поддерживает синтез речи.",
+        variant: "destructive",
+      });
+      console.error("Speech synthesis not supported.");
+      return;
+    }
+
+    const allVoices = window.speechSynthesis.getVoices();
+    console.log("Available voices at speakWord call:", allVoices); 
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang; 
+
+    // Attempt to find a suitable English voice
+    let englishVoice = allVoices.find(voice => voice.lang.startsWith('en') && voice.default);
+    if (!englishVoice) {
+      englishVoice = allVoices.find(voice => voice.lang.startsWith('en'));
+    }
+
+    if (englishVoice) {
+      utterance.voice = englishVoice;
+      console.log("Using voice:", englishVoice.name, englishVoice.lang);
+    } else if (allVoices.length > 0) {
+      console.warn(`No specific English voice found. Using browser default for lang '${lang}'.`);
+    } else {
+      console.warn("No voices available at all. Speech might not work.");
+      // Do not toast here again if already toasted in useEffect, but log is useful.
+    }
+
+    utterance.onstart = () => {
+      console.log(`Speech started for: "${text}"`);
+    };
+    utterance.onend = () => {
+      console.log(`Speech finished for: "${text}"`);
+    };
+    utterance.onerror = (event) => {
+      console.error("SpeechSynthesisUtterance.onerror", event);
+      toast({
+        title: "Ошибка озвучки",
+        description: `Не удалось воспроизвести звук: ${event.error || 'unknown error'}`,
+        variant: "destructive",
+      });
+    };
+
+    window.speechSynthesis.cancel(); 
+    window.speechSynthesis.speak(utterance);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) {
+      toast({
+        title: "Функция не поддерживается",
+        description: "Ваш браузер не поддерживает синтез речи. Озвучка слов будет недоступна.",
+        variant: "destructive",
+      });
+      console.error("Speech synthesis not supported on mount.");
+      return; 
+    }
+    
+    const onVoicesChanged = () => {
+      const voices = window.speechSynthesis.getVoices();
+      console.log("Voices changed/loaded by event:", voices);
+      if (voices.length === 0) {
+        console.warn("voiceschanged event fired, but no voices available yet.");
+      } else {
+        // Optional: You could trigger a state update if you need to react to voices being loaded
+        // For example, enabling a button only after voices are confirmed.
+        // For now, speakWord fetches voices on demand.
+      }
+    };
+
+    // It's crucial to check if voices are already loaded, or wait for 'voiceschanged'
+    const initialVoices = window.speechSynthesis.getVoices();
+    if (initialVoices.length === 0) {
+      console.log("Initially no voices, attaching voiceschanged listener.");
+      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+      // Some browsers require a user interaction to populate voices or even start synthesis.
+      // Also, sometimes a call to getVoices() itself can trigger loading.
+      if (window.speechSynthesis.getVoices().length === 0) { // Double check after a moment
+        console.warn("Still no voices after initial getVoices(). Waiting for event or interaction.");
+      }
+    } else {
+      console.log("Initial voices already available:", initialVoices);
+    }
+    
+    // Ensure getVoices is called at least once to potentially trigger loading
+    window.speechSynthesis.getVoices();
+
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+        window.speechSynthesis.cancel(); 
+      }
+    };
+  }, [toast]);
+
+
   useEffect(() => {
     if (mode === 'practice' && vocabRound && vocabRound.words.length > 0) {
       setCurrentWord(vocabRound.words[session.currentQuestionIndex]);
@@ -71,20 +149,6 @@ export default function VocabularyPracticePage() {
     }
   }, [mode, vocabRound, session.currentQuestionIndex]);
   
-  // Preload voices for speech synthesis
-  useEffect(() => {
-    if ('speechSynthesis' in window) {
-      // speechSynthesis.getVoices() might be asynchronous, 
-      // so calling it once helps ensure voices are loaded for subsequent calls.
-      const populateVoiceList = () => {
-        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.getVoices().length === 0) {
-          speechSynthesis.onvoiceschanged = populateVoiceList;
-        }
-      }
-      populateVoiceList();
-    }
-  }, []);
-
 
   if (!studentData || !user) return <div className="text-center p-8">Loading student data...</div>;
   if (!unit || !vocabRound) return <div className="text-center p-8">Vocabulary round not found.</div>;
