@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,7 +7,7 @@ import { getVocabRoundById, getUnitById } from '@/lib/course-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, CheckCircle, Lightbulb, RefreshCw, XCircle, Play, Eye } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Lightbulb, RefreshCw, XCircle, Play, Eye, Volume2 } from 'lucide-react';
 import type { Word, PracticeSessionState, StudentAnswer } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { updateStudentRoundProgress, getStudentRoundProgress } from '@/lib/progress-utils';
@@ -16,6 +15,29 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 type VocabPracticeMode = 'review' | 'practice' | 'results';
+
+// Helper function to speak text using Web Speech API
+const speakWord = (text: string, lang: string = 'en-US') => {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    // Attempt to find a suitable English voice
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('Google') || voice.default));
+    if (englishVoice) {
+      utterance.voice = englishVoice;
+    }
+    window.speechSynthesis.speak(utterance);
+  } else {
+    // Fallback for browsers that don't support speechSynthesis
+    // The toast is part of the component, so it will be available.
+    // We handle the alert directly in the component.
+    console.warn("Speech synthesis not supported by this browser.");
+    // Consider using a toast here if this function is called from within the component's scope
+    // toast({ title: "Speech Error", description: "Your browser does not support speech synthesis.", variant: "destructive" });
+  }
+};
+
 
 export default function VocabularyPracticePage() {
   const params = useParams();
@@ -48,6 +70,21 @@ export default function VocabularyPracticePage() {
       setCurrentWord(null);
     }
   }, [mode, vocabRound, session.currentQuestionIndex]);
+  
+  // Preload voices for speech synthesis
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      // speechSynthesis.getVoices() might be asynchronous, 
+      // so calling it once helps ensure voices are loaded for subsequent calls.
+      const populateVoiceList = () => {
+        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.getVoices().length === 0) {
+          speechSynthesis.onvoiceschanged = populateVoiceList;
+        }
+      }
+      populateVoiceList();
+    }
+  }, []);
+
 
   if (!studentData || !user) return <div className="text-center p-8">Loading student data...</div>;
   if (!unit || !vocabRound) return <div className="text-center p-8">Vocabulary round not found.</div>;
@@ -60,9 +97,6 @@ export default function VocabularyPracticePage() {
     const studentTypedAnswer = currentAnswer.trim();
     const isCorrect = studentTypedAnswer.toLowerCase() === currentWord.english.toLowerCase();
     
-    // Update userAnswers for the current word first.
-    // This ensures that when the timeout runs, even if it uses a stale 'session' closure for some parts,
-    // the functional update to setSession later will correctly get the latest userAnswers.
     setSession(prev => ({
       ...prev,
       userAnswers: {
@@ -74,23 +108,19 @@ export default function VocabularyPracticePage() {
     
     setTimeout(() => {
       setFeedback(null);
-      setCurrentAnswer(''); // Clear input for next question or if round ends
+      setCurrentAnswer(''); 
 
-      // Use a functional update for setSession to ensure we operate on the latest state
       setSession(prevSessionInTimeout => {
         if (prevSessionInTimeout.currentQuestionIndex < words.length - 1) {
-          // Move to next question
           return { 
             ...prevSessionInTimeout, 
             currentQuestionIndex: prevSessionInTimeout.currentQuestionIndex + 1 
           };
         } else {
-          // Last question: Calculate results using the latest state
           let correctCount = 0;
           const finalAnswersArray: StudentAnswer[] = [];
 
           words.forEach(word => {
-            // prevSessionInTimeout.userAnswers is guaranteed to be up-to-date here
             const userAnswer = prevSessionInTimeout.userAnswers[word.id] || ""; 
             const isWordCorrect = userAnswer.toLowerCase() === word.english.toLowerCase();
             if (isWordCorrect) {
@@ -103,9 +133,8 @@ export default function VocabularyPracticePage() {
           
           updateStudentRoundProgress(studentData.id, unitId, roundId, 'vocabulary', { answers: finalAnswersArray, score: finalScore });
           
-          setMode('results'); // This will trigger re-render to show results
+          setMode('results'); 
           
-          // Return the new state including the accurately calculated score
           return { 
             ...prevSessionInTimeout, 
             score: finalScore,
@@ -128,7 +157,20 @@ export default function VocabularyPracticePage() {
     
     toast({
       title: "Hint Used",
-      description: `Correct answer is: ${currentWord.english}`,
+      description: (
+        <div className="flex items-center">
+          Correct answer is: {currentWord.english}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 ml-1" 
+            onClick={(e) => { e.stopPropagation(); speakWord(currentWord.english); }}
+            aria-label="Play audio for hinted word"
+          >
+            <Volume2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
     });
     setSession(prev => ({ ...prev, hintsUsedThisSession: prev.hintsUsedThisSession + 1 }));
   };
@@ -149,8 +191,8 @@ export default function VocabularyPracticePage() {
     setSession(prev => ({
       ...prev,
       currentQuestionIndex: 0,
-      userAnswers: {}, // Reset answers for a new practice session
-      score: 0, // Reset score
+      userAnswers: {}, 
+      score: 0, 
       hintsUsedThisSession: 0, 
     }));
     setCurrentAnswer('');
@@ -178,7 +220,12 @@ export default function VocabularyPracticePage() {
                 {vocabRound.words.map(word => (
                   <Card key={word.id} className="bg-card/50 p-4">
                     <p className="text-lg font-semibold text-primary">{word.russian}</p>
-                    <p className="text-md text-foreground">Английский: {word.english}</p>
+                    <div className="flex items-center">
+                        <p className="text-md text-foreground mr-2">Английский: {word.english}</p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`}>
+                            <Volume2 className="h-4 w-4" />
+                        </Button>
+                    </div>
                     <p className="text-sm text-muted-foreground">Произношение: {word.transcription}</p>
                   </Card>
                 ))}
@@ -196,7 +243,6 @@ export default function VocabularyPracticePage() {
   }
 
   if (mode === 'results') {
-    // Ensure session.score is used for display, and the "X out of Y" recalculates from final userAnswers.
     const correctAnswersCount = words.filter(word => session.userAnswers[word.id]?.toLowerCase() === word.english.toLowerCase()).length;
     return (
       <div className="container mx-auto py-8 px-4 md:px-6 flex flex-col items-center">
@@ -217,13 +263,20 @@ export default function VocabularyPracticePage() {
                 const userAnswer = session.userAnswers[word.id] || "No answer";
                 const isCorrect = userAnswer.toLowerCase() === word.english.toLowerCase();
                 return (
-                  <li key={word.id} className={`flex justify-between items-center p-1.5 rounded ${isCorrect ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
-                    <div className="truncate mr-2">
-                      <span className="font-medium">{word.russian}:</span>{' '}
-                      <span className="italic">{userAnswer}</span>
-                      {!isCorrect && <span className="text-xs text-red-700 dark:text-red-400"> (Правильно: {word.english})</span>}
+                  <li key={word.id} className={`p-1.5 rounded ${isCorrect ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                     <div className="flex justify-between items-center w-full">
+                        <div className="flex-grow truncate mr-2">
+                            <span className="font-medium">{word.russian}:</span>{' '}
+                            <span className="italic">{userAnswer}</span>
+                            {!isCorrect && <span className="text-xs text-red-700 dark:text-red-400"> (Correct: {word.english})</span>}
+                        </div>
+                        <div className="flex items-center flex-shrink-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`}>
+                                <Volume2 className="h-4 w-4" />
+                            </Button>
+                            {isCorrect ? <CheckCircle className="text-green-500 h-5 w-5" /> : <XCircle className="text-red-500 h-5 w-5" />}
+                        </div>
                     </div>
-                    {isCorrect ? <CheckCircle className="text-green-500 h-5 w-5 flex-shrink-0" /> : <XCircle className="text-red-500 h-5 w-5 flex-shrink-0" />}
                   </li>
                 );
               })}
@@ -243,7 +296,6 @@ export default function VocabularyPracticePage() {
     );
   }
   
-  // Practice Mode
   const progressPercentage = words.length > 0 ? (session.currentQuestionIndex / words.length) * 100 : 0;
 
   return (
@@ -273,8 +325,25 @@ export default function VocabularyPracticePage() {
                 disabled={!!feedback}
                 aria-label="English translation input"
               />
-              {feedback === 'correct' && <p className="text-green-500 mt-3 font-semibold">Correct!</p>}
-              {feedback === 'incorrect' && <p className="text-red-500 mt-3 font-semibold">Incorrect.</p>}
+              {feedback === 'correct' && currentWord && (
+                <div className="flex items-center justify-center text-green-500 mt-3 font-semibold">
+                    <p>Correct!</p>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`}>
+                        <Volume2 className="h-4 w-4" />
+                    </Button>
+                </div>
+              )}
+              {feedback === 'incorrect' && currentWord && (
+                 <div className="flex flex-col items-center justify-center text-red-500 mt-3 font-semibold">
+                    <p>Incorrect.</p>
+                    <div className="flex items-center">
+                        <p className="mr-1">Correct: {currentWord.english}</p>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`}>
+                            <Volume2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+              )}
             </div>
           ) : (
             <p>Loading word...</p>
@@ -285,7 +354,8 @@ export default function VocabularyPracticePage() {
             onClick={useHint} 
             variant="outline" 
             size="sm"
-            disabled={!!feedback || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5}
+            disabled={!!feedback || !currentWord || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5}
+            aria-label={`Use hint, ${Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left`}
           >
             <Lightbulb className="mr-2 h-4 w-4" /> Hint ({Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left)
           </Button>

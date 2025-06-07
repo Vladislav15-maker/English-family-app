@@ -3,6 +3,14 @@ import type { Unit, Word, VocabRound, GrammarQuestion, GrammarRound } from '@/ty
 const createWord = (id: string, english: string, russian: string, transcription: string): Word => ({ id, english, russian, transcription });
 const createGrammarQuestion = (id: string, question: string, correctAnswer: string, questionType: GrammarQuestionType, options?: string[], exampleTransformation?: string): GrammarQuestion => ({ id, question, correctAnswer, questionType, options, exampleTransformation });
 
+// Helper to get date strings for unlockDate
+const getUnlockDate = (daysFromToday: number): Date => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  date.setHours(0, 0, 0, 0); // Set to start of the day for daily unlock logic
+  return date;
+};
+
 export const courseUnits: Unit[] = [
   // Unit 1
   {
@@ -10,7 +18,8 @@ export const courseUnits: Unit[] = [
     unitNumber: 1,
     title: 'Unit 1',
     description: 'Greetings',
-    isLocked: false, // First unit is unlocked
+    isLocked: false, 
+    unlockDate: new Date(new Date().setDate(new Date().getDate() -1)), // Ensures it's always unlocked
     imagePlaceholder: 'greetings people',
     vocabulary: [
       {
@@ -78,7 +87,8 @@ export const courseUnits: Unit[] = [
     unitNumber: 2,
     title: 'Unit 2',
     description: 'Family',
-    isLocked: false, // Unlocked for demo
+    isLocked: true, 
+    unlockDate: getUnlockDate(1), // Откроется на следующий день
     imagePlaceholder: 'family home',
     vocabulary: [
       {
@@ -140,13 +150,14 @@ export const courseUnits: Unit[] = [
       },
     ],
   },
-  // Unit 3 (Locked for demo, adjust isLocked as needed)
+  // Unit 3
   {
     id: 'unit-3',
     unitNumber: 3,
     title: 'Unit 3',
     description: 'Food',
     isLocked: true, 
+    unlockDate: getUnlockDate(2), 
     imagePlaceholder: 'food fruit',
     vocabulary: [
       { id: 'u3v1', title: 'Раунд 1', words: [
@@ -169,17 +180,12 @@ export const courseUnits: Unit[] = [
         createGrammarQuestion('u3g1q1', 'There ___ a book on the table.', 'is', 'multiple-choice', ['is', 'are']),
         createGrammarQuestion('u3g1q2', 'There ___ two chairs.', 'are', 'multiple-choice', ['is', 'are']),
       ]},
-      // Add more grammar rounds for Unit 3 if needed for full data
     ],
   },
-  // ... Add Units 4-10 based on the same pattern.
-  // For brevity in this generation, only first 2 units are fully detailed.
-  // The rest will be stubs.
 ];
 
-// Populate remaining units as stubs for now
-for (let i = 4; i <= 10; i++) {
-  const unitTopics: Record<number, { description: string, imageHint: string }> = {
+// Populate remaining units
+const unitTopics: Record<number, { description: string, imageHint: string }> = {
     4: { description: "Numbers", imageHint: "numbers count" },
     5: { description: "Colors", imageHint: "colors palette" },
     6: { description: "School", imageHint: "school classroom" },
@@ -187,14 +193,16 @@ for (let i = 4; i <= 10; i++) {
     8: { description: "Weather", imageHint: "weather forecast" },
     9: { description: "Days of the week", imageHint: "calendar days" },
     10: { description: "Hobbies", imageHint: "hobbies leisure" },
-  };
-  
+};
+
+for (let i = 4; i <= 10; i++) {
   courseUnits.push({
     id: `unit-${i}`,
     unitNumber: i,
     title: `Unit ${i}`,
     description: unitTopics[i]?.description || `Topic for Unit ${i}`,
-    isLocked: i > 2, // Lock units after Unit 2 for demo
+    isLocked: true, 
+    unlockDate: getUnlockDate(i - 1), 
     imagePlaceholder: unitTopics[i]?.imageHint || "placeholder image",
     vocabulary: [
       { id: `u${i}v1`, title: 'Раунд 1', words: [createWord(`u${i}v1w1`, `word${i}-1`, `слово${i}-1`, `[transcription${i}-1]`)] },
@@ -223,4 +231,3 @@ export const getVocabRoundById = (unitId: string, roundId: string): VocabRound |
 export const getGrammarRoundById = (unitId: string, roundId: string): GrammarRound | undefined => {
   const unit = getUnitById(unitId);
   return unit?.grammar.find(gr => gr.id === roundId);
-};
