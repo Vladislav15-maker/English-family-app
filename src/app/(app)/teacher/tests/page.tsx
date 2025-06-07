@@ -34,17 +34,20 @@ export default function TeacherTestsPage() {
   const [testToDelete, setTestToDelete] = useState<UnitTest | null>(null);
 
   useEffect(() => {
+    // Initial load of tests
     setTests([...mockUnitTests]); 
   }, []);
 
+  // Effect to listen for changes in mockUnitTests (e.g., after creation)
   useEffect(() => {
     const interval = setInterval(() => {
+      // Simple shallow comparison for changes in length or status of tests
       if (tests.length !== mockUnitTests.length || !tests.every((t, i) => t.id === mockUnitTests[i]?.id && t.status === mockUnitTests[i]?.status)) {
         setTests([...mockUnitTests]);
       }
-    }, 1000);
+    }, 1000); // Check every second
     return () => clearInterval(interval);
-  }, [tests]);
+  }, [tests]); // Rerun if local 'tests' state changes to re-establish listener with current state
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
@@ -54,7 +57,7 @@ export default function TeacherTestsPage() {
     const testIndex = mockUnitTests.findIndex(t => t.id === testId);
     if (testIndex > -1 && mockUnitTests[testIndex].status === 'pending') {
       mockUnitTests[testIndex].status = 'waiting_room_open';
-      setTests([...mockUnitTests]); // Force re-render
+      setTests([...mockUnitTests]); // Update local state to reflect change
       toast({ title: "Waiting Room Opened", description: `Waiting room for "${mockUnitTests[testIndex].title}" is now open.` });
       router.push(`/teacher/tests/${testId}/waiting`);
     } else {
@@ -67,7 +70,7 @@ export default function TeacherTestsPage() {
     if (testIndex > -1 && (mockUnitTests[testIndex].status === 'active' || mockUnitTests[testIndex].status === 'waiting_room_open')) {
       mockUnitTests[testIndex].status = 'completed';
       mockUnitTests[testIndex].endTime = new Date();
-      setTests([...mockUnitTests]); // Force re-render
+      setTests([...mockUnitTests]); // Update local state
       toast({ title: "Test Ended", description: `Test "${mockUnitTests[testIndex].title}" has been marked as completed.` });
     } else {
       toast({ title: "Error", description: "Test could not be ended. It might not be active or in waiting room.", variant: "destructive" });
@@ -79,21 +82,21 @@ export default function TeacherTestsPage() {
       const testIndex = mockUnitTests.findIndex(t => t.id === testToDelete.id);
       if (testIndex > -1) {
         mockUnitTests.splice(testIndex, 1);
-        setTests([...mockUnitTests]); // Force re-render
+        setTests([...mockUnitTests]); // Update local state
         toast({ title: "Test Deleted", description: `Test "${testToDelete.title}" has been deleted.` });
       } else {
         toast({ title: "Error", description: "Test not found for deletion.", variant: "destructive" });
       }
-      setTestToDelete(null);
+      setTestToDelete(null); // Close the dialog
     }
   };
   
   const getStatusBadgeVariant = (status: UnitTest['status']) => {
     switch (status) {
       case 'pending': return 'outline';
-      case 'waiting_room_open': return 'default'; 
-      case 'active': return 'secondary';
-      case 'completed': return 'destructive'; 
+      case 'waiting_room_open': return 'default'; // Using default for 'Open' seems more prominent
+      case 'active': return 'secondary'; // Consider a more "active" color if needed
+      case 'completed': return 'destructive'; // Or perhaps a less alarming color for completed
       default: return 'outline';
     }
   };
@@ -168,13 +171,14 @@ export default function TeacherTestsPage() {
                             <Square className="h-4 w-4 mr-1" /> End Test
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/results`)} title="View Results/Submissions">
+                        {/* Placeholder buttons for features to be implemented */}
+                        <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/results`)} title="View Results/Submissions (Coming Soon)">
                           <Eye className="h-4 w-4" />
                         </Button>
-                         <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (only for pending tests)" disabled={test.status !== 'pending'}>
+                         <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (Coming Soon for pending tests)" disabled={test.status !== 'pending'}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialogTrigger asChild>
+                        <AlertDialogTrigger asChild key={`delete-${test.id}`}>
                           <Button variant="ghost" size="sm" onClick={() => setTestToDelete(test)} title="Delete Test">
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -200,7 +204,7 @@ export default function TeacherTestsPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setTestToDelete(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDeleteTest}>Delete</AlertDialogAction>
+                <AlertDialogAction onClick={confirmDeleteTest} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
@@ -208,4 +212,5 @@ export default function TeacherTestsPage() {
     </div>
   );
 }
+
 
