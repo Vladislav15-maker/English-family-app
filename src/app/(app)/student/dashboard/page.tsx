@@ -7,12 +7,13 @@ import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
 import type { Unit, UnitTest, Message } from '@/types';
 import Image from 'next/image';
-import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, Users, MessageCircle, AlertTriangle, Info } from 'lucide-react';
+import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, Users, MessageCircle, AlertTriangle, Info, GraduationCap } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
 import { mockStudents, mockUnitTests, getMockMessages } from '@/lib/mock-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper to calculate unlock status more dynamically if needed in future
 const isUnitActuallyLocked = (unit: Unit): boolean => {
@@ -28,8 +29,9 @@ const isUnitActuallyLocked = (unit: Unit): boolean => {
 
 
 export default function StudentDashboardPage() {
-  const { studentData, user } = useAuth(); // Added user for messages
+  const { studentData, user } = useAuth(); 
   const router = useRouter();
+  const { toast } = useToast();
   const [progressSummary, setProgressSummary] = useState<StudentProgressSummary | null>(null);
   const [activeTestNotification, setActiveTestNotification] = useState<UnitTest | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
@@ -38,6 +40,14 @@ export default function StudentDashboardPage() {
     if (studentData) {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
+
+      // Check for active tests relevant to the student
+      const currentActiveTest = mockUnitTests.find(test => 
+        test.status === 'active' && 
+        (!test.forStudentId || test.forStudentId === studentData.id) &&
+        (!test.forGroupId /* add group check if implemented */ ) 
+      );
+      setActiveTestNotification(currentActiveTest || null);
     }
     if (user) {
       const messages = getMockMessages(user.id, user.role);
@@ -45,13 +55,15 @@ export default function StudentDashboardPage() {
     }
   }, [studentData, user]);
 
-  // Mock function to simulate teacher starting a test
+
   const simulateTeacherStartsTest = () => {
     const availableTest = mockUnitTests.find(test => test.status === 'active' );
     if (availableTest) {
       setActiveTestNotification(availableTest);
+       toast({ title: "Test Active!", description: `Test "${availableTest.title}" is now active. You can join from the notification.`});
     } else {
-      alert("No suitable active test found to simulate.");
+      toast({ title: "No Active Test", description: "No suitable active test found for simulation.", variant: "default" });
+      setActiveTestNotification(null); // Clear notification if no active test
     }
   };
 
@@ -92,7 +104,7 @@ export default function StudentDashboardPage() {
                 Simulate Teacher Starts Active Test
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
-                This button is for demonstration. In a real app, test initiation would be triggered by the teacher.
+                This button is for demonstration. It makes an already 'active' test show its notification. In a real app, test initiation would be triggered by the teacher.
             </p>
         </CardContent>
       </Card>
@@ -117,14 +129,14 @@ export default function StudentDashboardPage() {
              <p className="text-sm text-muted-foreground">Use them wisely!</p>
           </CardContent>
         </Card>
-         <Card className="shadow-lg hover:shadow-xl transition-shadow">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-headline"><Users className="text-secondary-foreground"/> My Class</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline"><GraduationCap className="text-secondary-foreground"/> My Tests</CardTitle>
           </CardHeader>
           <CardContent>
-             <p className="text-2xl font-semibold text-secondary-foreground">{mockStudents.length}</p>
-             <p className="text-sm text-muted-foreground">students in class</p>
-             <Link href="/student/class"><Button variant="link" className="p-0 h-auto">View Class</Button></Link>
+             <p className="text-2xl font-semibold text-secondary-foreground">{mockUnitTests.length}</p>
+             <p className="text-sm text-muted-foreground">tests assigned</p>
+             <Link href="/student/tests"><Button variant="link" className="p-0 h-auto">View Tests</Button></Link>
           </CardContent>
         </Card>
          <Card className="shadow-lg hover:shadow-xl transition-shadow">

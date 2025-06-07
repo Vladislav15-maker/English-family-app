@@ -4,15 +4,15 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Users, BookOpenText, CalendarCheck, BarChart, MessageSquarePlus, PlusCircle } from 'lucide-react';
-import { mockStudents } from '@/lib/mock-data'; // Assuming you have this with student info
-import { getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
+import { Users, BookOpenText, CalendarCheck, BarChart, MessageSquarePlus, PlusCircle, ListChecks } from 'lucide-react';
+import { mockStudents, mockUnitTests } from '@/lib/mock-data'; 
+import { getOverallStudentProgress } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
 
 interface AggregatedProgress {
   averageCompletion: number;
   activeStudents: number;
-  testsConducted: number; // Mock this for now
+  testsConducted: number; 
 }
 
 export default function TeacherDashboardPage() {
@@ -32,8 +32,8 @@ export default function TeacherDashboardPage() {
       });
       setAggregatedProgress({
         averageCompletion: studentsWithProgress > 0 ? totalCompletion / studentsWithProgress : 0,
-        activeStudents: mockStudents.length, // Or count students with recent activity
-        testsConducted: 5, // Mock value
+        activeStudents: mockStudents.length, 
+        testsConducted: mockUnitTests.filter(t => t.status === 'completed').length, 
       });
     }
   }, [teacherData]);
@@ -69,11 +69,11 @@ export default function TeacherDashboardPage() {
         </Card>
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-headline"><BookOpenText className="text-secondary-foreground"/> Tests Conducted</CardTitle>
+            <CardTitle className="flex items-center gap-2 font-headline"><ListChecks className="text-secondary-foreground"/> Tests Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold text-secondary-foreground">{aggregatedProgress?.testsConducted ?? 0}</p>
-            <p className="text-sm text-muted-foreground">unit tests completed</p>
+            <p className="text-2xl font-semibold text-secondary-foreground">{mockUnitTests.length}</p>
+            <p className="text-sm text-muted-foreground">total tests configured</p>
              <Link href="/teacher/tests"><Button variant="link" className="p-0 h-auto mt-1">Manage Tests</Button></Link>
           </CardContent>
         </Card>
@@ -124,3 +124,4 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
+

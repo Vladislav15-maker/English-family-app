@@ -48,19 +48,20 @@ const createInitialUnitProgress = (unitId: string): StudentUnitProgress => {
   };
 };
 
-export const mockUnitTests: UnitTest[] = [
+export let mockUnitTests: UnitTest[] = [ // Changed to let
     {
         id: 'test-unit-1-general',
         unitId: 'unit-1',
-        title: 'Unit 1 General Test',
+        title: 'Unit 1 General Test (Active Demo)',
         teacherId: 'teacher-vlad',
-        status: 'pending', 
+        status: 'active', // Set to active for easier testing of student notification
         durationMinutes: 30,
         questions: [
             ...(courseUnits.find(u => u.id === 'unit-1')?.vocabulary[0].words.slice(0,2) || []),
             ...(courseUnits.find(u => u.id === 'unit-1')?.grammar[0].questions.slice(0,3) || [])
         ],
-        assignedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // Already available to be started by teacher
+        assignedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), 
+        startTime: new Date(Date.now() - 5 * 60 * 1000), // Started 5 mins ago
     },
     {
         id: 'test-unit-2-vocab',
@@ -72,7 +73,7 @@ export const mockUnitTests: UnitTest[] = [
         questions: [
              ...(courseUnits.find(u => u.id === 'unit-2')?.vocabulary[0].words || [])
         ],
-        assignedDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // Already available
+        assignedDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), 
     },
     {
         id: 'test-unit-3-grammar',
@@ -84,17 +85,18 @@ export const mockUnitTests: UnitTest[] = [
         questions: [
             ...(courseUnits.find(u => u.id === 'unit-3')?.grammar[0].questions || [])
         ],
-        assignedDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // Scheduled for the future
+        assignedDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), 
     },
     {
         id: 'test-unit-1-completed-by-oksana', 
         unitId: 'unit-1',
-        title: 'Unit 1 Review', 
+        title: 'Unit 1 Review (Example for Results)', 
         teacherId: 'teacher-vlad',
-        status: 'pending', // Reset status to pending
+        status: 'completed', // Example of a teacher-completed test
         durationMinutes: 25,
         questions: [ /* Can be empty or populated */ ], 
-        assignedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Old test, now pending again
+        assignedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        endTime: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
     }
 ];
 
@@ -105,12 +107,25 @@ mockStudents.forEach(student => {
   courseUnits.forEach(unit => {
     mockStudentProgress[student.id][unit.id] = createInitialUnitProgress(unit.id);
   });
-  // Specifically reset the "completed" test for Oksana by ensuring her unitTest progress for test-unit-1-completed-by-oksana is undefined
-  if (student.id === 'student-oksana' && mockStudentProgress[student.id]['unit-1']) {
-      const unit1Progress = mockStudentProgress[student.id]['unit-1'];
-      if(unit1Progress.unitTest?.roundId === 'test-unit-1-completed-by-oksana') {
-        unit1Progress.unitTest = undefined;
-      }
+  
+  // Simulate Oksana having completed the 'test-unit-1-completed-by-oksana'
+  if (student.id === 'student-oksana') {
+    const unit1Progress = mockStudentProgress[student.id]['unit-1'];
+    if (unit1Progress) {
+      const testResultForOksana: StudentRoundProgress = {
+        roundId: 'test-unit-1-completed-by-oksana',
+        completed: true,
+        score: 85, // Example score
+        correctAnswers: 4, // Example
+        totalQuestions: 5, // Example
+        attempts: [{
+          answers: [/* mock answers or leave empty */],
+          score: 85,
+          timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000 - 10 * 60 * 1000) // 10 mins before teacher marked as completed
+        }]
+      };
+      unit1Progress.unitTest = testResultForOksana;
+    }
   }
 });
 
@@ -119,8 +134,10 @@ export let mockMessages: Message[] = [];
 
 export const getMockMessages = (userId: string, userRole: 'student' | 'teacher'): Message[] => {
   if (userRole === 'teacher') {
-    return mockMessages.filter(msg => msg.recipientId === userId || msg.senderId === userId || msg.recipientId === 'all_students');
+    // Teachers see messages sent to them and announcements they made
+    return mockMessages.filter(msg => msg.recipientId === userId || (msg.senderId === userId && msg.recipientId === 'all_students') || msg.senderId === userId);
   }
+  // Students see messages sent to them and announcements
   return mockMessages.filter(msg => msg.recipientId === userId || msg.senderId === userId || msg.recipientId === 'all_students');
 };
 
@@ -132,4 +149,3 @@ export const mockStudentAttendance: StudentAttendance[] = mockStudents.map(stude
 }));
 
 export const mockWaitingRoomParticipants: Record<string, { studentId: string; studentName: string; avatarFallback: string }[]> = {};
-

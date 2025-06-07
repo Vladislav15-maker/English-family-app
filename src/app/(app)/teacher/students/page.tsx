@@ -9,8 +9,8 @@ import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { PlusCircle, Edit3, Eye } from 'lucide-react';
-import { getStudentProgressForUnit } from '@/lib/progress-utils'; // You'll create this
-import { Progress } from '@/components/ui/progress'; // Shadcn progress bar
+import { getStudentProgressForUnit, getOverallStudentProgress } from '@/lib/progress-utils'; 
+import { Progress } from '@/components/ui/progress'; 
 
 export default function TeacherStudentsPage() {
   const { teacherData } = useAuth();
@@ -32,7 +32,7 @@ export default function TeacherStudentsPage() {
             <h1 className="text-3xl font-headline text-foreground">Manage Students</h1>
             <p className="text-muted-foreground">View student progress and manage class details.</p>
         </div>
-        <Button onClick={() => alert('Add new student functionality coming soon!')}>
+        <Button onClick={() => alert('Add new student functionality will be available soon!')}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Student
         </Button>
       </div>
@@ -42,7 +42,7 @@ export default function TeacherStudentsPage() {
           <CardTitle>Student List & Progress</CardTitle>
           <CardDescription>
             Track homework completion for each student across all units. 
-            Green indicates &gt;=80% completion, Orange indicates &lt;80%.
+            Progress indicators show overall unit completion.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -52,7 +52,7 @@ export default function TeacherStudentsPage() {
                 <TableRow>
                   <TableHead className="w-[250px]">Student</TableHead>
                   <TableHead className="text-center w-[150px]">Overall Progress</TableHead>
-                  {courseUnits.slice(0, 5).map(unit => ( // Show first 5 units for brevity, can be made scrollable or paginated
+                  {courseUnits.slice(0, 5).map(unit => ( 
                     <TableHead key={unit.id} className="text-center w-[100px]">{unit.title}</TableHead>
                   ))}
                   <TableHead className="text-right w-[150px]">Actions</TableHead>
@@ -60,15 +60,14 @@ export default function TeacherStudentsPage() {
               </TableHeader>
               <TableBody>
                 {mockStudents.map((student) => {
-                  // Calculate overall progress (mocked for now)
-                  const overallProgressValue = mockStudents.indexOf(student) === 0 ? 75 : mockStudents.indexOf(student) === 1 ? 40 : 0;
+                  const overallProgressSummary = getOverallStudentProgress(student.id);
+                  const overallProgressValue = overallProgressSummary.overallAverageCompletion;
 
                   return (
                     <TableRow key={student.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10 border">
-                            {/* <AvatarImage src={student.avatarUrl} /> */}
                             <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">
                                 {getInitials(student.name)}
                             </AvatarFallback>
@@ -81,8 +80,8 @@ export default function TeacherStudentsPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex flex-col items-center">
-                           <Progress value={overallProgressValue} className="w-24 h-2 mb-1" />
-                           <span className="text-xs text-muted-foreground">{overallProgressValue}%</span>
+                           <Progress value={overallProgressValue} className="w-24 h-2 mb-1" aria-label={`Overall progress ${overallProgressValue.toFixed(0)}%`} />
+                           <span className="text-xs text-muted-foreground">{overallProgressValue.toFixed(0)}%</span>
                         </div>
                       </TableCell>
                       {courseUnits.slice(0, 5).map(unit => {
@@ -118,6 +117,7 @@ export default function TeacherStudentsPage() {
               </TableBody>
             </Table>
           </div>
+           <p className="text-xs text-muted-foreground mt-2">Showing first {courseUnits.slice(0,5).length} units. Full unit list can be seen on student detail page.</p>
         </CardContent>
       </Card>
     </div>

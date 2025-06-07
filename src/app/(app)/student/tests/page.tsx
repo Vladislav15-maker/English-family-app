@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
@@ -10,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, Clock, CheckCircle, ListChecks, ArrowLeft, XCircle, Hourglass } from 'lucide-react';
+import { GraduationCap, Clock, CheckCircle, ListChecks, ArrowLeft, XCircle, Hourglass, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
@@ -22,7 +21,7 @@ export default function StudentTestsPage() {
     return <div className="text-center p-8">Loading student data...</div>;
   }
 
-  const availableTests = mockUnitTests;
+  const availableTests = mockUnitTests; // In a real app, filter by student assignment
 
   const getTestStatusInfo = (test: UnitTestType, studentTestProgress?: StudentRoundProgress) => {
     const lastAttemptTimestamp = studentTestProgress?.attempts && studentTestProgress.attempts.length > 0 
@@ -32,9 +31,9 @@ export default function StudentTestsPage() {
     if (studentTestProgress?.completed) {
       return { 
         text: `Completed: ${studentTestProgress.score.toFixed(0)}%`, 
-        badgeVariant: "default" as "default" | "secondary" | "destructive" | "outline" | null | undefined,
+        badgeVariant: "default" as const,
         actionText: "View Results",
-        actionLink: `/student/tests/${test.id}/results`, // Placeholder for results page
+        actionLink: `/student/tests/${test.id}/results`,
         actionIcon: <ListChecks className="mr-2 h-4 w-4" />,
         disabled: false,
         dateInfo: lastAttemptTimestamp ? `Taken: ${format(new Date(lastAttemptTimestamp), "PP")}` : ""
@@ -43,31 +42,32 @@ export default function StudentTestsPage() {
     if (test.status === 'active') {
       return { 
         text: "Active", 
-        badgeVariant: "secondary" as "default" | "secondary" | "destructive" | "outline" | null | undefined,
-        actionText: "Waiting for Teacher", // Changed from "Start Test"
-        actionIcon: <Hourglass className="mr-2 h-4 w-4" />, // Changed icon
-        disabled: true, // Student cannot start it themselves now
-        dateInfo: `Duration: ${test.durationMinutes} min. Join from dashboard when notified.`
+        badgeVariant: "secondary" as const,
+        actionText: "Join Waiting Room", 
+        actionLink: `/student/tests/${test.id}/waiting`,
+        actionIcon: <Play className="mr-2 h-4 w-4" />, 
+        disabled: false, // Student can attempt to join
+        dateInfo: `Duration: ${test.durationMinutes} min. Teacher has started this test.`
       };
     }
     if (test.status === 'pending') {
       return { 
         text: "Scheduled", 
-        badgeVariant: "outline" as "default" | "secondary" | "destructive" | "outline" | null | undefined,
-        actionText: "Not Yet Available",
+        badgeVariant: "outline" as const,
+        actionText: "Not Yet Started",
         actionIcon: <Clock className="mr-2 h-4 w-4" />,
         disabled: true,
-        dateInfo: test.assignedDate ? `From: ${format(new Date(test.assignedDate), "PP")}` : ""
+        dateInfo: test.assignedDate ? `From: ${format(new Date(test.assignedDate), "PP")}` : "Awaiting teacher"
       };
     }
     // Teacher marked as completed or expired (test.status === 'completed' or other)
     return { 
         text: "Ended", 
-        badgeVariant: "destructive" as "default" | "secondary" | "destructive" | "outline" | null | undefined,
+        badgeVariant: "destructive" as const,
         actionText: "Test Ended",
         actionIcon: <XCircle className="mr-2 h-4 w-4" />,
         disabled: true,
-        dateInfo: test.endTime ? `Ended: ${format(new Date(test.endTime), "PPp")}` : ""
+        dateInfo: test.endTime ? `Ended: ${format(new Date(test.endTime), "PPp")}` : "Teacher marked as completed"
     };
   };
 
@@ -81,7 +81,7 @@ export default function StudentTestsPage() {
         <h1 className="text-3xl font-headline text-foreground">My Tests</h1>
       </div>
       <p className="text-muted-foreground mb-8">
-        View your assigned tests and results. Active tests will appear on your dashboard when started by the teacher.
+        View your assigned tests and results. Active tests can be joined from here or your dashboard when started by the teacher.
       </p>
 
       {availableTests.length === 0 && (
@@ -95,7 +95,6 @@ export default function StudentTestsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {availableTests.map((test) => {
           const unit = getUnitById(test.unitId);
-          // Ensure we are checking the specific test by its ID as the roundId for unitTest progress
           const studentTestProgressForThisTest = getStudentProgressForUnit(studentData.id, test.unitId)?.unitTest?.roundId === test.id 
             ? getStudentProgressForUnit(studentData.id, test.unitId)?.unitTest 
             : undefined;
@@ -139,5 +138,7 @@ export default function StudentTestsPage() {
     </div>
   );
 }
+
+
 
     
