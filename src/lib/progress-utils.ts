@@ -1,15 +1,16 @@
 import type { AllStudentsProgress, StudentUnitProgress, StudentRoundProgress, Unit, VocabRound, GrammarRound } from '@/types';
-import { mockStudentProgress, saveStudentProgress } from './mock-data';
+import { getMockStudentProgress, saveStudentProgress } from './mock-data';
 import { courseUnits } from './course-data';
 
-// Get progress for a specific round (vocab or grammar)
+// Get progress for a specific round (vocab or grammar or test)
 export const getStudentRoundProgress = (
   studentId: string,
   unitId: string,
   roundId: string,
-  type: 'vocabulary' | 'grammar' | 'test' // Added 'test' for unit tests
+  type: 'vocabulary' | 'grammar' | 'test'
 ): StudentRoundProgress | undefined => {
-  const studentProgress = mockStudentProgress[studentId];
+  const currentGlobalProgress = getMockStudentProgress();
+  const studentProgress = currentGlobalProgress[studentId];
   if (!studentProgress || !studentProgress[unitId]) {
     return undefined; 
   }
@@ -20,11 +21,14 @@ export const getStudentRoundProgress = (
 
 // Get progress for a specific unit
 export const getStudentProgressForUnit = (studentId: string, unitId: string): StudentUnitProgress | undefined => {
-  const studentProgress = mockStudentProgress[studentId];
-   if (!studentProgress || !studentProgress[unitId]) {
+  const currentGlobalProgress = getMockStudentProgress();
+  const studentUnits = currentGlobalProgress[studentId];
+
+  if (!studentUnits || !studentUnits[unitId]) {
     const unit = courseUnits.find(u => u.id === unitId);
     if (!unit) return undefined; 
 
+    // Initialize progress for this student and unit if it doesn't exist
     const defaultUnitProgress: StudentUnitProgress = {
       unitId: unitId,
       vocabRounds: {},
@@ -39,12 +43,14 @@ export const getStudentProgressForUnit = (studentId: string, unitId: string): St
       defaultUnitProgress.grammarRounds[gr.id] = { roundId: gr.id, completed: false, score: 0, correctAnswers: 0, totalQuestions: gr.questions.length, attempts: [] };
     });
     
-    if(!studentProgress) mockStudentProgress[studentId] = {};
-    mockStudentProgress[studentId][unitId] = defaultUnitProgress;
-    saveStudentProgress(); // Save after initializing
+    if (!currentGlobalProgress[studentId]) currentGlobalProgress[studentId] = {};
+    currentGlobalProgress[studentId][unitId] = defaultUnitProgress;
+    saveStudentProgress(currentGlobalProgress); 
     return defaultUnitProgress;
   }
-  return studentProgress[unitId];
+  // Ensure overallCompletion is calculated before returning existing progress
+  calculateOverallUnitCompletion(studentUnits[unitId]); 
+  return studentUnits[unitId];
 };
 
 // Update progress for a specific round
@@ -55,8 +61,11 @@ export const updateStudentRoundProgress = (
   type: 'vocabulary' | 'grammar',
   newAttempt: { answers: { itemId: string; studentAnswer: string; isCorrect: boolean }[]; score: number }
 ): void => {
-  if (!mockStudentProgress[studentId]) mockStudentProgress[studentId] = {};
-  if (!mockStudentProgress[studentId][unitId]) {
+  const currentGlobalProgress = getMockStudentProgress();
+  if (!currentGlobalProgress[studentId]) currentGlobalProgress[studentId] = {};
+  
+  let unitProgress = currentGlobalProgress[studentId][unitId];
+  if (!unitProgress) {
      const unit = courseUnits.find(u => u.id === unitId);
      if (!unit) return; 
      const newUnitProgress: StudentUnitProgress = {
@@ -68,10 +77,10 @@ export const updateStudentRoundProgress = (
      };
      unit.vocabulary.forEach(vr => newUnitProgress.vocabRounds[vr.id] = { roundId: vr.id, completed: false, score: 0, correctAnswers: 0, totalQuestions: vr.words.length, attempts: []});
      unit.grammar.forEach(gr => newUnitProgress.grammarRounds[gr.id] = { roundId: gr.id, completed: false, score: 0, correctAnswers: 0, totalQuestions: gr.questions.length, attempts: []});
-     mockStudentProgress[studentId][unitId] = newUnitProgress;
+     currentGlobalProgress[studentId][unitId] = newUnitProgress;
+     unitProgress = newUnitProgress;
   }
 
-  const unitProgress = mockStudentProgress[studentId][unitId];
   let roundProgress: StudentRoundProgress | undefined;
   let totalQuestionsInRound = 0;
 
@@ -104,19 +113,18 @@ export const updateStudentRoundProgress = (
   roundProgress.completed = true;
 
   calculateOverallUnitCompletion(unitProgress);
-  saveStudentProgress(); // Save after any update
+  saveStudentProgress(currentGlobalProgress); 
 };
 
-// New function for teacher to update/set a unit test score manually
 export const setManualUnitTestScore = (
   studentId: string,
   unitId: string,
   score: number
 ): void => {
-  if (!mockStudentProgress[studentId]) mockStudentProgress[studentId] = {};
+  const currentGlobalProgress = getMockStudentProgress();
+  if (!currentGlobalProgress[studentId]) currentGlobalProgress[studentId] = {};
   
-  // Ensure unit progress exists or initialize it
-  let unitProgress = mockStudentProgress[studentId][unitId];
+  let unitProgress = currentGlobalProgress[studentId][unitId];
   if (!unitProgress) {
     const unit = courseUnits.find(u => u.id === unitId);
     if (!unit) {
@@ -132,18 +140,18 @@ export const setManualUnitTestScore = (
     };
     unit.vocabulary.forEach(vr => unitProgress.vocabRounds[vr.id] = { roundId: vr.id, completed: false, score: 0, correctAnswers: 0, totalQuestions: vr.words.length, attempts: []});
     unit.grammar.forEach(gr => unitProgress.grammarRounds[gr.id] = { roundId: gr.id, completed: false, score: 0, correctAnswers: 0, totalQuestions: gr.questions.length, attempts: []});
-    mockStudentProgress[studentId][unitId] = unitProgress;
+    currentGlobalProgress[studentId][unitId] = unitProgress;
   }
 
-  const testRoundId = `${unitId}-manual-test`; // Consistent ID for the manual test
+  const testRoundId = `${unitId}-manual-test`; 
 
   unitProgress.unitTest = {
     roundId: testRoundId,
     completed: true,
-    score: Math.max(0, Math.min(100, score)), // Clamp score between 0 and 100
-    correctAnswers: 0, // Not applicable for manual score
-    totalQuestions: 0, // Not applicable
-    attempts: [{ // Create a single attempt representing the manual grade
+    score: Math.max(0, Math.min(100, score)), 
+    correctAnswers: 0, 
+    totalQuestions: 0, 
+    attempts: [{ 
       answers: [],
       score: Math.max(0, Math.min(100, score)),
       timestamp: new Date()
@@ -151,76 +159,72 @@ export const setManualUnitTestScore = (
   };
 
   calculateOverallUnitCompletion(unitProgress);
-  saveStudentProgress();
+  saveStudentProgress(currentGlobalProgress);
 };
 
 
-// Calculate overall completion for a unit
-const calculateOverallUnitCompletion = (unitProgress: StudentUnitProgress): void => {
+export const calculateOverallUnitCompletion = (unitProgress: StudentUnitProgress): void => {
   let totalScore = 0;
-  let totalRounds = 0;
+  let totalRoundsCount = 0; // Only count rounds that contribute to score (homework rounds)
+  let homeworkCompletionScore = 0; // Sum of scores from vocab and grammar rounds
+  let homeworkRoundsCount = 0;
+
 
   Object.values(unitProgress.vocabRounds).forEach(rp => {
-    totalScore += rp.score;
-    totalRounds++;
+    homeworkCompletionScore += rp.score;
+    homeworkRoundsCount++;
   });
   Object.values(unitProgress.grammarRounds).forEach(rp => {
-    totalScore += rp.score;
-    totalRounds++;
+    homeworkCompletionScore += rp.score;
+    homeworkRoundsCount++;
   });
   
-  if (unitProgress.unitTest && unitProgress.unitTest.completed) {
-    totalScore += unitProgress.unitTest.score;
-    totalRounds++;
-  }
-
-  unitProgress.overallCompletion = totalRounds > 0 ? totalScore / totalRounds : 0;
+  // Overall completion for the unit is based on homework rounds average.
+  // Test score is separate.
+  unitProgress.overallCompletion = homeworkRoundsCount > 0 ? homeworkCompletionScore / homeworkRoundsCount : 0;
 };
 
 export interface StudentProgressSummary {
   totalUnits: number;
-  completedUnits: number;
-  overallAverageCompletion: number;
+  completedUnits: number; // Units where homework average is 100%
+  overallAverageCompletion: number; // Average of homework completion across all units
 }
 
-// Get overall progress summary for a student
 export const getOverallStudentProgress = (studentId: string): StudentProgressSummary => {
-  const studentUnitsProgress = mockStudentProgress[studentId] || {};
-  let totalCompletionSum = 0;
-  let unitsAttemptedOrGraded = 0; // Count units that have any progress or a test grade
-  let completedUnitsCount = 0;
+  const currentGlobalProgress = getMockStudentProgress();
+  const studentUnitsProgress = currentGlobalProgress[studentId] || {};
+  let totalHomeworkCompletionSum = 0;
+  let completedHomeworkUnitsCount = 0;
   
   courseUnits.forEach(unit => {
     const unitProgress = studentUnitsProgress[unit.id];
     if (unitProgress) {
       calculateOverallUnitCompletion(unitProgress); 
-      totalCompletionSum += unitProgress.overallCompletion;
-      // A unit is considered "active" if any round has progress or if the unit test is graded
-      const hasRoundProgress = Object.values(unitProgress.vocabRounds).some(r => r.completed) || Object.values(unitProgress.grammarRounds).some(r => r.completed);
-      if (hasRoundProgress || (unitProgress.unitTest && unitProgress.unitTest.completed)) {
-        unitsAttemptedOrGraded++;
-      }
-      if (unitProgress.overallCompletion >= 100) { // Assuming 100% means fully mastered including test
-        completedUnitsCount++;
+      totalHomeworkCompletionSum += unitProgress.overallCompletion; // This is homework completion
+      if (unitProgress.overallCompletion >= 100) {
+        completedHomeworkUnitsCount++;
       }
     }
+    // If unitProgress is undefined for a unit, its overallCompletion is effectively 0 for the average
   });
 
   return {
     totalUnits: courseUnits.length,
-    completedUnits: completedUnitsCount,
-    // Average completion considers all units, even those not started (0% for them)
-    overallAverageCompletion: courseUnits.length > 0 ? totalCompletionSum / courseUnits.length : 0,
+    completedUnits: completedHomeworkUnitsCount,
+    overallAverageCompletion: courseUnits.length > 0 ? totalHomeworkCompletionSum / courseUnits.length : 0,
   };
 };
 
 
 export const getAllStudentsProgressData = (): AllStudentsProgress => {
-  Object.values(mockStudentProgress).forEach(studentUnits => {
+  const currentGlobalProgress = getMockStudentProgress(); // Ensures latest from localStorage
+  Object.values(currentGlobalProgress).forEach(studentUnits => {
     Object.values(studentUnits).forEach(unitProg => {
       calculateOverallUnitCompletion(unitProg);
     });
   });
-  saveStudentProgress(); // Ensure the latest calculations are saved
-  return mockStudentProgress;
+  // saveStudentProgress(currentGlobalProgress); // Not strictly necessary to save again if just reading, unless calculateOverall changes it
+  return currentGlobalProgress;
 };
+
+
