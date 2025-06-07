@@ -1,4 +1,4 @@
-import type { Unit, Word, VocabRound, GrammarQuestion, GrammarRound } from '@/types';
+import type { Unit, Word, VocabRound, GrammarQuestion, GrammarQuestionType, GrammarRound } from '@/types';
 
 const createWord = (id: string, english: string, russian: string, transcription: string): Word => ({ id, english, russian, transcription });
 const createGrammarQuestion = (id: string, question: string, correctAnswer: string, questionType: GrammarQuestionType, options?: string[], exampleTransformation?: string): GrammarQuestion => ({ id, question, correctAnswer, questionType, options, exampleTransformation });
@@ -7,7 +7,7 @@ const createGrammarQuestion = (id: string, question: string, correctAnswer: stri
 const getUnlockDate = (daysFromToday: number): Date => {
   const date = new Date();
   date.setDate(date.getDate() + daysFromToday);
-  date.setHours(0, 0, 0, 0); // Set to start of the day for daily unlock logic
+  date.setHours(18, 0, 0, 0); // Set to 6 PM on unlock day, for comparison. Actual check logic in component.
   return date;
 };
 
@@ -19,7 +19,7 @@ export const courseUnits: Unit[] = [
     title: 'Unit 1',
     description: 'Greetings',
     isLocked: false, 
-    unlockDate: new Date(new Date().setDate(new Date().getDate() -1)), // Ensures it's always unlocked
+    unlockDate: new Date(new Date().setDate(new Date().getDate() -1 )), // Previous day to ensure it's unlocked
     imagePlaceholder: 'greetings people',
     vocabulary: [
       {
@@ -88,7 +88,7 @@ export const courseUnits: Unit[] = [
     title: 'Unit 2',
     description: 'Family',
     isLocked: true, 
-    unlockDate: getUnlockDate(1), // Откроется на следующий день
+    unlockDate: getUnlockDate(1), // Откроется на следующий день в 18:00
     imagePlaceholder: 'family home',
     vocabulary: [
       {
@@ -180,6 +180,14 @@ export const courseUnits: Unit[] = [
         createGrammarQuestion('u3g1q1', 'There ___ a book on the table.', 'is', 'multiple-choice', ['is', 'are']),
         createGrammarQuestion('u3g1q2', 'There ___ two chairs.', 'are', 'multiple-choice', ['is', 'are']),
       ]},
+      { id: 'u3g2', title: 'Раунд 2: Some / Any - Заполни пропуски', questions: [
+        createGrammarQuestion('u3g2q1', 'Is there ___ milk in the fridge?', 'any', 'fill-in-the-blank'),
+        createGrammarQuestion('u3g2q2', 'There are ___ apples on the tree.', 'some', 'fill-in-the-blank'),
+      ]},
+      { id: 'u3g3', title: 'Раунд 3: How much / How many - Преобразуй вопрос', questions: [
+        createGrammarQuestion('u3g3q1', 'There is some sugar. (Ask about quantity)', 'How much sugar is there?', 'transform'),
+        createGrammarQuestion('u3g3q2', 'There are apples. (Ask about quantity)', 'How many apples are there?', 'transform'),
+      ]},
     ],
   },
 ];
@@ -202,7 +210,7 @@ for (let i = 4; i <= 10; i++) {
     title: `Unit ${i}`,
     description: unitTopics[i]?.description || `Topic for Unit ${i}`,
     isLocked: true, 
-    unlockDate: getUnlockDate(i - 1), 
+    unlockDate: getUnlockDate(i - 1), // Each subsequent unit unlocks one day later
     imagePlaceholder: unitTopics[i]?.imageHint || "placeholder image",
     vocabulary: [
       { id: `u${i}v1`, title: 'Раунд 1', words: [createWord(`u${i}v1w1`, `word${i}-1`, `слово${i}-1`, `[transcription${i}-1]`)] },
@@ -231,3 +239,4 @@ export const getVocabRoundById = (unitId: string, roundId: string): VocabRound |
 export const getGrammarRoundById = (unitId: string, roundId: string): GrammarRound | undefined => {
   const unit = getUnitById(unitId);
   return unit?.grammar.find(gr => gr.id === roundId);
+};
