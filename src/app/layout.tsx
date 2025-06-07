@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Toaster } from "@/components/ui/toaster";
+// import { Toaster } from "@/components/ui/toaster"; // Временно закомментировано
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
@@ -34,7 +34,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           {children}
-          <Toaster />
+          {/* <Toaster /> */} {/* Временно закомментировано */}
         </AuthProvider>
       </body>
     </html>
