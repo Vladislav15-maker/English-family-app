@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   username: string;
@@ -117,7 +116,7 @@ export interface UnitTest {
   unitId: string; // ID of the unit this test belongs to
   title: string;
   teacherId: string;
-  status: 'pending' | 'active' | 'completed'; // 'completed' means teacher has marked it as finished/graded, not student submission
+  status: 'pending' | 'waiting_room_open' | 'active' | 'completed'; // 'completed' means teacher has marked it as finished/graded, not student submission
   durationMinutes: number;
   questions: (Word | GrammarQuestion)[]; 
   startTime?: Date; // Teacher starts the test for students
@@ -133,9 +132,7 @@ export interface UnitTest {
 export interface PracticeSessionState {
   currentQuestionIndex: number;
   userAnswers: Record<string, string>; // key is word.id or question.id
-  // showResults: boolean; // Replaced by mode on the page
   score: number;
-  currentRoundData?: VocabRound | GrammarRound; // May not be needed if round data is passed directly
   hintsUsedThisSession: number;
 }
 
@@ -152,4 +149,3 @@ export interface TeacherData {
   messages: Message[];
 }
 
-  

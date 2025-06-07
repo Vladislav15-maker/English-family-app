@@ -9,19 +9,40 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, Clock, CheckCircle, ListChecks, ArrowLeft, XCircle, Hourglass, Play } from 'lucide-react';
+import { GraduationCap, Clock, CheckCircle, ListChecks, ArrowLeft, XCircle, Hourglass, Play, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { useState, useEffect } from 'react'; // Added for live updates
 
 export default function StudentTestsPage() {
   const { studentData } = useAuth();
   const router = useRouter();
+  const [tests, setTests] = useState<UnitTestType[]>([]); // Local state for tests
+
+  useEffect(() => {
+    // Initialize tests and subscribe to changes for live updates
+    setTests([...mockUnitTests]); 
+
+    const interval = setInterval(() => {
+      // This is a simple way to check for changes in mockUnitTests.
+      // In a real app, this would be handled by a state management solution or WebSocket.
+      if (mockUnitTests.some((mockTest, index) => 
+            tests[index]?.id !== mockTest.id || tests[index]?.status !== mockTest.status
+         ) || tests.length !== mockUnitTests.length
+      ) {
+        setTests([...mockUnitTests]);
+      }
+    }, 1500); // Check every 1.5 seconds
+
+    return () => clearInterval(interval);
+  }, [tests]); // Re-run effect if local tests state itself is forced to change
+
 
   if (!studentData) {
     return <div className="text-center p-8">Loading student data...</div>;
   }
 
-  const availableTests = mockUnitTests; // In a real app, filter by student assignment
+  const availableTests = tests.filter(t => !t.forStudentId || t.forStudentId === studentData.id);
 
   const getTestStatusInfo = (test: UnitTestType, studentTestProgress?: StudentRoundProgress) => {
     const lastAttemptTimestamp = studentTestProgress?.attempts && studentTestProgress.attempts.length > 0 
@@ -39,15 +60,26 @@ export default function StudentTestsPage() {
         dateInfo: lastAttemptTimestamp ? `Taken: ${format(new Date(lastAttemptTimestamp), "PP")}` : ""
       };
     }
+    if (test.status === 'waiting_room_open') {
+      return {
+        text: "Waiting Room Open",
+        badgeVariant: "secondary" as const, // Green or similar for joinable
+        actionText: "Join Waiting Room",
+        actionLink: `/student/tests/${test.id}/waiting`,
+        actionIcon: <Users className="mr-2 h-4 w-4" />,
+        disabled: false,
+        dateInfo: `Duration: ${test.durationMinutes} min. Ready to join.`
+      };
+    }
     if (test.status === 'active') {
       return { 
         text: "Active", 
-        badgeVariant: "secondary" as const,
-        actionText: "Join Waiting Room", 
-        actionLink: `/student/tests/${test.id}/waiting`,
+        badgeVariant: "default" as const, // Primary color for active test
+        actionText: "Test In Progress", // Placeholder for actual test taking UI
+        actionLink: `/student/tests/${test.id}/take`, // Future page
         actionIcon: <Play className="mr-2 h-4 w-4" />, 
-        disabled: false, // Student can attempt to join
-        dateInfo: `Duration: ${test.durationMinutes} min. Teacher has started this test.`
+        disabled: true, // Disabled until test taking page is built
+        dateInfo: `Duration: ${test.durationMinutes} min. Test has started.`
       };
     }
     if (test.status === 'pending') {
@@ -81,7 +113,7 @@ export default function StudentTestsPage() {
         <h1 className="text-3xl font-headline text-foreground">My Tests</h1>
       </div>
       <p className="text-muted-foreground mb-8">
-        View your assigned tests and results. Active tests can be joined from here or your dashboard when started by the teacher.
+        View your assigned tests. Join waiting rooms when they open, or see results for completed tests.
       </p>
 
       {availableTests.length === 0 && (
@@ -105,7 +137,7 @@ export default function StudentTestsPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="font-headline text-xl mb-1">{test.title}</CardTitle>
-                  {statusInfo.badgeVariant && <Badge variant={statusInfo.badgeVariant}>{statusInfo.text}</Badge>}
+                  {statusInfo.badgeVariant && <Badge variant={statusInfo.badgeVariant} className="capitalize">{statusInfo.text.split(':')[0]}</Badge>}
                 </div>
                 <CardDescription>
                   For Unit: {unit?.title || 'N/A'} <br />
@@ -121,7 +153,11 @@ export default function StudentTestsPage() {
               <CardFooter>
                 {statusInfo.actionLink ? (
                   <Link href={statusInfo.actionLink} passHref className="w-full">
-                    <Button className="w-full" variant={studentTestProgressForThisTest?.completed ? "secondary" : "default"} disabled={statusInfo.disabled}>
+                    <Button 
+                        className="w-full" 
+                        variant={studentTestProgressForThisTest?.completed ? "secondary" : (test.status === 'waiting_room_open' ? 'default' : 'outline')} 
+                        disabled={statusInfo.disabled}
+                    >
                       {statusInfo.actionIcon} {statusInfo.actionText}
                     </Button>
                   </Link>

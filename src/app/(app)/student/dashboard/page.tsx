@@ -7,22 +7,21 @@ import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
 import type { Unit, UnitTest, Message } from '@/types';
 import Image from 'next/image';
-import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, Users, MessageCircle, AlertTriangle, Info, GraduationCap } from 'lucide-react';
+import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, Users, MessageCircle, AlertTriangle, Info, GraduationCap, Hourglass } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
-import { mockStudents, mockUnitTests, getMockMessages } from '@/lib/mock-data';
+import { mockUnitTests, getMockMessages } from '@/lib/mock-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
-// Helper to calculate unlock status more dynamically if needed in future
 const isUnitActuallyLocked = (unit: Unit): boolean => {
-  if (!unit.unlockDate) return unit.isLocked; // Fallback to static lock
+  if (!unit.unlockDate) return unit.isLocked; 
   const today = new Date();
-  today.setHours(0,0,0,0); // Compare dates only
+  today.setHours(0,0,0,0); 
   
   const unitUnlockDateTime = new Date(unit.unlockDate);
-  unitUnlockDateTime.setHours(18,0,0,0); // Set to 6 PM on unlock day
+  unitUnlockDateTime.setHours(18,0,0,0); 
 
   return new Date() < unitUnlockDateTime;
 };
@@ -41,13 +40,13 @@ export default function StudentDashboardPage() {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
 
-      // Check for active tests relevant to the student
-      const currentActiveTest = mockUnitTests.find(test => 
-        test.status === 'active' && 
+      // Check for tests student can join or are active
+      const relevantTest = mockUnitTests.find(test => 
+        (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
         (!test.forGroupId /* add group check if implemented */ ) 
       );
-      setActiveTestNotification(currentActiveTest || null);
+      setActiveTestNotification(relevantTest || null);
     }
     if (user) {
       const messages = getMockMessages(user.id, user.role);
@@ -55,17 +54,56 @@ export default function StudentDashboardPage() {
     }
   }, [studentData, user]);
 
+  // Simulates mockUnitTests being updated by teacher actions
+   useEffect(() => {
+    const interval = setInterval(() => {
+      if (studentData) {
+        const relevantTest = mockUnitTests.find(test => 
+          (test.status === 'waiting_room_open' || test.status === 'active') &&
+          (!test.forStudentId || test.forStudentId === studentData.id)
+        );
+        setActiveTestNotification(prevTest => {
+          if (prevTest?.id !== relevantTest?.id || prevTest?.status !== relevantTest?.status) {
+            return relevantTest || null;
+          }
+          return prevTest;
+        });
+      }
+    }, 2000); // Check for test status changes
+    return () => clearInterval(interval);
+  }, [studentData]);
 
-  const simulateTeacherStartsTest = () => {
-    const availableTest = mockUnitTests.find(test => test.status === 'active' );
-    if (availableTest) {
-      setActiveTestNotification(availableTest);
-       toast({ title: "Test Active!", description: `Test "${availableTest.title}" is now active. You can join from the notification.`});
+
+  const simulateTeacherOpensWaitingRoom = () => {
+    // Find a pending test and change its status to waiting_room_open
+    const pendingTestIndex = mockUnitTests.findIndex(test => test.status === 'pending');
+    if (pendingTestIndex !== -1) {
+      mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
+      setActiveTestNotification(mockUnitTests[pendingTestIndex]);
+      toast({ title: "Waiting Room Open!", description: `Test "${mockUnitTests[pendingTestIndex].title}" is now open for joining.`});
     } else {
-      toast({ title: "No Active Test", description: "No suitable active test found for simulation.", variant: "default" });
-      setActiveTestNotification(null); // Clear notification if no active test
+      toast({ title: "No Pending Test", description: "No suitable pending test found for simulation.", variant: "default" });
     }
   };
+  
+  const simulateTeacherStartsActiveTestFromWaitingRoom = () => {
+     const waitingTestIndex = mockUnitTests.findIndex(test => test.status === 'waiting_room_open');
+     if (waitingTestIndex !== -1) {
+        mockUnitTests[waitingTestIndex].status = 'active';
+        mockUnitTests[waitingTestIndex].startTime = new Date();
+        setActiveTestNotification(mockUnitTests[waitingTestIndex]);
+        toast({ title: "Test Active!", description: `Test "${mockUnitTests[waitingTestIndex].title}" is now active.`});
+     } else {
+        const activeTest = mockUnitTests.find(test => test.status === 'active');
+        if(activeTest) {
+            setActiveTestNotification(activeTest);
+            toast({ title: "Test Already Active", description: `Test "${activeTest.title}" is active.`});
+        } else {
+            toast({ title: "No Test in Waiting Room", description: "No test is currently in 'waiting_room_open' state.", variant: "default" });
+        }
+     }
+  };
+
 
   if (!studentData) {
     return <div className="text-center p-8">Loading student data...</div>;
@@ -74,37 +112,69 @@ export default function StudentDashboardPage() {
   const unlockedUnits = courseUnits.filter(unit => !isUnitActuallyLocked(unit)); 
   const lockedUnitsCount = courseUnits.length - unlockedUnits.length;
 
+  const getNotificationAlert = () => {
+    if (!activeTestNotification) return null;
+
+    let title = "";
+    let description = "";
+    let buttonText = "";
+    let buttonAction = () => {};
+    let icon = <AlertTriangle className="h-5 w-5 text-primary" />;
+
+    if (activeTestNotification.status === 'waiting_room_open') {
+      title = "Test Waiting Room Open!";
+      description = `Your teacher has opened the waiting room for the test: ${activeTestNotification.title}.`;
+      buttonText = "Join Waiting Room";
+      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
+      icon = <Hourglass className="h-5 w-5 text-primary animate-pulse" />;
+    } else if (activeTestNotification.status === 'active') {
+      title = "Test In Progress!";
+      description = `The test "${activeTestNotification.title}" is currently active.`;
+      buttonText = "Go to Test (Coming Soon)"; // Placeholder for actual test taking page
+      buttonAction = () => toast({title: "Test In Progress", description: "Test taking interface coming soon."});
+      icon = <PlayCircle className="h-5 w-5 text-green-500" />;
+    } else {
+        return null; // Should not happen based on filter
+    }
+
+    return (
+      <Alert className="mb-6 border-primary shadow-lg">
+        {icon}
+        <AlertTitle className="font-headline text-xl text-primary">{title}</AlertTitle>
+        <AlertDescription className="text-foreground">
+          {description}
+          <Button 
+            onClick={buttonAction} 
+            className="mt-3 w-full sm:w-auto ml-0 sm:ml-4"
+            size="sm"
+          >
+            {buttonText}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  };
+
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
       <h1 className="text-3xl font-headline mb-8 text-foreground">Welcome, {studentData.name}!</h1>
 
-      {activeTestNotification && (
-        <Alert className="mb-6 border-primary shadow-lg">
-          <AlertTriangle className="h-5 w-5 text-primary" />
-          <AlertTitle className="font-headline text-xl text-primary">Test Starting Soon!</AlertTitle>
-          <AlertDescription className="text-foreground">
-            Your teacher has started the test: <span className="font-semibold">{activeTestNotification.title}</span>.
-            <Button 
-              onClick={() => router.push(`/student/tests/${activeTestNotification.id}/waiting`)} 
-              className="mt-3 w-full sm:w-auto ml-0 sm:ml-4"
-              size="sm"
-            >
-              Join Waiting Room
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      {getNotificationAlert()}
 
       <Card className="mb-8 shadow-md">
         <CardHeader>
             <CardTitle className="text-lg font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent"/>Developer Actions</CardTitle>
         </CardHeader>
-        <CardContent>
-            <Button onClick={simulateTeacherStartsTest} variant="outline">
+        <CardContent className="flex flex-wrap gap-2">
+            <Button onClick={simulateTeacherOpensWaitingRoom} variant="outline" size="sm">
+                Simulate Teacher Opens Waiting Room
+            </Button>
+            <Button onClick={simulateTeacherStartsActiveTestFromWaitingRoom} variant="outline" size="sm">
                 Simulate Teacher Starts Active Test
             </Button>
-            <p className="text-xs text-muted-foreground mt-2">
-                This button is for demonstration. It makes an already 'active' test show its notification. In a real app, test initiation would be triggered by the teacher.
+            <p className="text-xs text-muted-foreground mt-2 w-full">
+                These buttons simulate teacher actions for testing notifications.
             </p>
         </CardContent>
       </Card>
@@ -134,7 +204,7 @@ export default function StudentDashboardPage() {
             <CardTitle className="flex items-center gap-2 font-headline"><GraduationCap className="text-secondary-foreground"/> My Tests</CardTitle>
           </CardHeader>
           <CardContent>
-             <p className="text-2xl font-semibold text-secondary-foreground">{mockUnitTests.length}</p>
+             <p className="text-2xl font-semibold text-secondary-foreground">{mockUnitTests.filter(t => !t.forStudentId || t.forStudentId === studentData.id).length}</p>
              <p className="text-sm text-muted-foreground">tests assigned</p>
              <Link href="/student/tests"><Button variant="link" className="p-0 h-auto">View Tests</Button></Link>
           </CardContent>

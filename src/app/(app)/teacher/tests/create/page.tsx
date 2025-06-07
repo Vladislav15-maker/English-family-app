@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { mockUnitTests, mockTeacher } from '@/lib/mock-data';
+import { mockUnitTests } from '@/lib/mock-data';
 import { courseUnits, getUnitById } from '@/lib/course-data';
-import type { UnitTest, Word as WordType, GrammarQuestion as GrammarQuestionType } from '@/types'; // Renamed to avoid conflict
+import type { UnitTest, Word as WordType, GrammarQuestion as GrammarQuestionType, Unit } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, PlusCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ArrowLeft, PlusCircle, BookOpenText, Type } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function CreateTestPage() {
@@ -21,63 +22,74 @@ export default function CreateTestPage() {
   const { toast } = useToast();
 
   const [title, setTitle] = useState('');
-  const [unitId, setUnitId] = useState('');
+  const [selectedUnitId, setSelectedUnitId] = useState<string | undefined>(undefined);
+  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(30);
-  // For simplicity, questions are auto-populated based on unit selection later.
-  // A real implementation would need a more complex question selection UI.
+  const [selectedQuestions, setSelectedQuestions] = useState<Record<string, boolean>>({}); // Store IDs of selected questions/words
+
+  useEffect(() => {
+    if (selectedUnitId) {
+      const unit = getUnitById(selectedUnitId);
+      setSelectedUnit(unit || null);
+      setSelectedQuestions({}); // Reset selected questions when unit changes
+    } else {
+      setSelectedUnit(null);
+      setSelectedQuestions({});
+    }
+  }, [selectedUnitId]);
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
   }
 
+  const handleQuestionSelection = (itemId: string) => {
+    setSelectedQuestions(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId],
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !unitId || durationMinutes <= 0) {
+    if (!title || !selectedUnitId || !selectedUnit || durationMinutes <= 0) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all fields correctly. Duration must be positive.",
+        description: "Please fill in title, select a unit, and set a positive duration.",
         variant: "destructive",
       });
       return;
     }
 
-    const selectedUnit = getUnitById(unitId);
-    if (!selectedUnit) {
-      toast({ title: "Error", description: "Selected unit not found.", variant: "destructive" });
+    const questionsForTest: (WordType | GrammarQuestionType)[] = [];
+    selectedUnit.vocabulary.forEach(vr => vr.words.forEach(word => {
+      if (selectedQuestions[word.id]) questionsForTest.push(word);
+    }));
+    selectedUnit.grammar.forEach(gr => gr.questions.forEach(q => {
+      if (selectedQuestions[q.id]) questionsForTest.push(q);
+    }));
+
+    if (questionsForTest.length === 0) {
+      toast({
+        title: "No Questions Selected",
+        description: "Please select at least one word or grammar question for the test.",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Auto-populate questions from first vocab and first grammar round of the selected unit
-    const questions: (WordType | GrammarQuestionType)[] = [];
-    if (selectedUnit.vocabulary.length > 0 && selectedUnit.vocabulary[0].words.length > 0) {
-      questions.push(...selectedUnit.vocabulary[0].words);
-    }
-    if (selectedUnit.grammar.length > 0 && selectedUnit.grammar[0].questions.length > 0) {
-      questions.push(...selectedUnit.grammar[0].questions);
-    }
-
-    if (questions.length === 0) {
-        toast({
-            title: "Warning",
-            description: "Selected unit has no vocabulary or grammar in the first rounds to auto-populate questions. Test created with 0 questions.",
-            variant: "default", // Or destructive if 0 questions is not allowed
-        });
-    }
-
-
     const newTest: UnitTest = {
       id: `test-${Date.now()}`,
-      unitId,
+      unitId: selectedUnitId,
       title,
       teacherId: teacherData.id,
       status: 'pending',
       durationMinutes,
-      questions,
+      questions: questionsForTest,
       assignedDate: new Date(),
     };
 
-    mockUnitTests.push(newTest);
-    toast({ title: "Test Created!", description: `"${title}" has been added to the test list.` });
+    mockUnitTests.push(newTest); // Add to the global mock array
+    toast({ title: "Test Created!", description: `"${title}" has been added. Status: Pending.` });
     router.push('/teacher/tests');
   };
 
@@ -87,13 +99,13 @@ export default function CreateTestPage() {
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Tests
       </Button>
       
-      <Card className="w-full max-w-2xl mx-auto shadow-xl">
+      <Card className="w-full max-w-3xl mx-auto shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-headline flex items-center">
             <PlusCircle className="mr-3 h-7 w-7 text-primary" /> Create New Unit Test
           </CardTitle>
           <CardDescription>
-            Define the details for a new test. Questions will be auto-populated from the selected unit's first rounds.
+            Define test details and select questions from the chosen unit.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -111,7 +123,7 @@ export default function CreateTestPage() {
 
             <div className="space-y-2">
               <Label htmlFor="unitId">Associated Unit</Label>
-              <Select onValueChange={setUnitId} value={unitId} required>
+              <Select onValueChange={setSelectedUnitId} value={selectedUnitId} required>
                 <SelectTrigger id="unitId">
                   <SelectValue placeholder="Select a unit" />
                 </SelectTrigger>
@@ -125,6 +137,48 @@ export default function CreateTestPage() {
               </Select>
             </div>
 
+            {selectedUnit && (
+              <div className="space-y-4 p-4 border rounded-md">
+                <h3 className="text-lg font-semibold">Select Questions for "{selectedUnit.title}"</h3>
+                <ScrollArea className="h-72">
+                  {selectedUnit.vocabulary.map(vr => (
+                    <div key={vr.id} className="mb-4">
+                      <h4 className="font-medium text-primary flex items-center gap-2 mb-2"><BookOpenText/>{vr.title} (Vocabulary)</h4>
+                      {vr.words.map(word => (
+                        <div key={word.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
+                          <Checkbox
+                            id={`q-${word.id}`}
+                            checked={!!selectedQuestions[word.id]}
+                            onCheckedChange={() => handleQuestionSelection(word.id)}
+                          />
+                          <Label htmlFor={`q-${word.id}`} className="flex-1 cursor-pointer">
+                            {word.russian} ({word.english})
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {selectedUnit.grammar.map(gr => (
+                    <div key={gr.id} className="mb-4">
+                      <h4 className="font-medium text-accent flex items-center gap-2 mb-2"><Type/>{gr.title} (Grammar)</h4>
+                      {gr.questions.map(q => (
+                        <div key={q.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
+                          <Checkbox
+                            id={`q-${q.id}`}
+                            checked={!!selectedQuestions[q.id]}
+                            onCheckedChange={() => handleQuestionSelection(q.id)}
+                          />
+                          <Label htmlFor={`q-${q.id}`} className="flex-1 cursor-pointer">
+                            {q.question.substring(0, 50)}{q.question.length > 50 ? "..." : ""} <span className="text-xs text-muted-foreground">({q.questionType})</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </ScrollArea>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="durationMinutes">Duration (minutes)</Label>
               <Input
@@ -136,14 +190,9 @@ export default function CreateTestPage() {
                 required
               />
             </div>
-            
-            <div className="text-sm text-muted-foreground">
-                Note: Test questions will be automatically populated from the first vocabulary round and first grammar round of the selected unit. A full question editor will be available in a future update.
-            </div>
-
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full md:w-auto">
+            <Button type="submit" className="w-full md:w-auto" disabled={!selectedUnit}>
               Create Test
             </Button>
           </CardFooter>
@@ -151,4 +200,3 @@ export default function CreateTestPage() {
       </Card>
     </div>
   );
-}
