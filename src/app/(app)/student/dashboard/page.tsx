@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
 import type { Unit, UnitTest, Message } from '@/types';
 import Image from 'next/image';
-import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, Info, GraduationCap, Hourglass, ListChecks } from 'lucide-react'; // Removed AlertTriangle as Alert is removed
+import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, Info, GraduationCap, Hourglass, ListChecks, RefreshCw } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
 import { mockUnitTests, getMockMessages } from '@/lib/mock-data';
@@ -52,24 +52,33 @@ export default function StudentDashboardPage() {
   }, [user]);
 
    useEffect(() => {
-    if (!studentData) return;
+    if (!studentData) {
+      console.log('[Student Dashboard Interval Setup] studentData is null, interval not starting.');
+      return;
+    }
+    console.log('[Student Dashboard Interval Setup] studentData loaded, starting interval for student:', studentData.id);
 
     const interval = setInterval(() => {
-      // Fetch the current state of mockUnitTests
-      const currentTestsSnapshot = mockUnitTests.map(t => ({...t})); // Create shallow copies
+      // Create a deep copy for reliable comparison and to avoid unintended mutations if any part of the system relies on object identity.
+      const currentTestsSnapshot = JSON.parse(JSON.stringify(mockUnitTests)) as UnitTest[];
+      // console.log('[Student Dashboard Interval Check] Raw mockUnitTests:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, status:t.status, title:t.title})))));
+      // console.log('[Student Dashboard Interval Check] currentTestsSnapshot from interval:', currentTestsSnapshot.map(t=> ({id:t.id, title: t.title, status:t.status})));
+
 
       const relevantTests = currentTestsSnapshot.filter(test =>
         (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
         (!test.forGroupId /* add group check if implemented */ )
       );
+      // console.log('[Student Dashboard Interval Check] Filtered relevantTests:', relevantTests.map(t=> ({id:t.id, title: t.title, status:t.status})));
       
-      // Update state only if the list of relevant tests (IDs and statuses) has changed
       setJoinableTests(prevTests => {
         const relevantTestIdsAndStatuses = relevantTests.map(t => `${t.id}-${t.status}`).sort().join(',');
         const prevTestIdsAndStatuses = prevTests.map(t => `${t.id}-${t.status}`).sort().join(',');
+
         if (relevantTestIdsAndStatuses !== prevTestIdsAndStatuses) {
-          return relevantTests;
+          console.log('[Student Dashboard Interval Check] Updating joinableTests. New relevant tests:', relevantTests.map(t=>({id: t.id, status: t.status, title:t.title})), 'Previous joinableTests:', prevTests.map(t=>({id: t.id, status: t.status, title:t.title})));
+          return [...relevantTests]; // Ensure a new array reference
         }
         return prevTests;
       });
@@ -77,6 +86,7 @@ export default function StudentDashboardPage() {
     }, 2000); // Check every 2 seconds
 
     return () => {
+      console.log('[Student Dashboard Interval Cleanup] Clearing interval for student:', studentData.id);
       clearInterval(interval);
     };
   }, [studentData]);
@@ -93,7 +103,8 @@ export default function StudentDashboardPage() {
     if (pendingTestIndex !== -1) {
       mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
       toast({ title: "Waiting Room Now Open (Simulated)", description: `Test "${mockUnitTests[pendingTestIndex].title}" is ready to join.`});
-      // console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
+      console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
+      console.log('[Simulate] mockUnitTests after opening waiting room:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
     } else {
       toast({ title: "No Pending Test Found", description: "Could not find a 'pending' test to open for simulation.", variant: "default" });
     }
@@ -110,7 +121,8 @@ export default function StudentDashboardPage() {
         mockUnitTests[waitingTestIndex].status = 'active';
         mockUnitTests[waitingTestIndex].startTime = new Date();
         toast({ title: "Test Now Active (Simulated)", description: `Test "${mockUnitTests[waitingTestIndex].title}" has started.`});
-        // console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
+        console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
+        console.log('[Simulate] mockUnitTests after starting test:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
      } else {
         const activeTest = mockUnitTests.find(test => test.status === 'active' && (!test.forStudentId || test.forStudentId === studentData.id));
         if(activeTest) {
@@ -120,6 +132,25 @@ export default function StudentDashboardPage() {
         }
      }
   };
+
+  const handleManualLogMockTests = () => {
+    if (!studentData) {
+      console.log('[MANUAL LOG] studentData is null. Cannot effectively log tests.');
+      return;
+    }
+    console.log('[MANUAL LOG] Current studentData.id:', studentData.id);
+    const currentGlobalMockTests = JSON.parse(JSON.stringify(mockUnitTests)) as UnitTest[];
+    console.log('[MANUAL LOG] Global mockUnitTests (snapshot):', currentGlobalMockTests.map(t => ({id: t.id, status: t.status, title: t.title})));
+    
+    const relevantTestsFromGlobal = currentGlobalMockTests.filter(test =>
+      (test.status === 'waiting_room_open' || test.status === 'active') &&
+      (!test.forStudentId || test.forStudentId === studentData.id) &&
+      (!test.forGroupId)
+    );
+    console.log('[MANUAL LOG] Filtered relevant tests from global snapshot:', relevantTestsFromGlobal.map(t => ({id: t.id, status: t.status, title: t.title})));
+    console.log('[MANUAL LOG] Current joinableTests state:', joinableTests.map(t => ({id: t.id, status: t.status, title: t.title})));
+  };
+
 
   if (!studentData || !user) {
     return <div className="text-center p-8">Loading student data...</div>;
@@ -177,15 +208,20 @@ export default function StudentDashboardPage() {
         <CardHeader>
             <CardTitle className="text-lg font-headline flex items-center"><Info className="mr-2 h-5 w-5 text-accent"/>Developer Actions</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-            <Button onClick={simulateTeacherOpensWaitingRoom} variant="outline" size="sm">
-                Simulate: Teacher Opens Waiting Room (for a 'pending' test)
-            </Button>
-            <Button onClick={simulateTeacherStartsActiveTestFromWaitingRoom} variant="outline" size="sm">
-                Simulate: Teacher Starts Active Test (from 'waiting_room_open')
+        <CardContent className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={simulateTeacherOpensWaitingRoom} variant="outline" size="sm">
+                  Simulate: Teacher Opens Waiting Room
+              </Button>
+              <Button onClick={simulateTeacherStartsActiveTestFromWaitingRoom} variant="outline" size="sm">
+                  Simulate: Teacher Starts Active Test
+              </Button>
+            </div>
+            <Button onClick={handleManualLogMockTests} variant="ghost" size="sm" className="self-start text-accent underline">
+                <RefreshCw className="mr-2 h-4 w-4" /> Log Current mockUnitTests to Console
             </Button>
             <p className="text-xs text-muted-foreground mt-2 w-full">
-                These buttons simulate teacher actions to test notifications without teacher login. They affect the first suitable test in `mockUnitTests`.
+                "Simulate" buttons affect the first suitable test. "Log" button shows data seen by this dashboard.
             </p>
         </CardContent>
       </Card>
@@ -282,6 +318,7 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+    
     
 
 
