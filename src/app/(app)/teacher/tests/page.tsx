@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Play, Square, Edit, Trash2, Eye, ListChecks, Users, Hourglass } from 'lucide-react';
+import { PlusCircle, Square, Edit, Trash2, Eye, ListChecks, Users, Hourglass } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
@@ -30,22 +30,28 @@ export default function TeacherTestsPage() {
   const { teacherData } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  // Local state to manage the list of tests, initialized from mockUnitTests
+  // This allows the component to re-render when mockUnitTests is modified externally (e.g., on create)
   const [tests, setTests] = useState<UnitTest[]>([]);
-  const [testToDelete, setTestToDelete] = useState<UnitTest | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
-    setTests([...mockUnitTests]); 
+    setTests([...mockUnitTests]); // Initialize with a copy
   }, []);
 
+  // Periodically check mockUnitTests for changes and update local state if necessary
+  // This simulates reactivity to external changes to the mock data.
   useEffect(() => {
     const interval = setInterval(() => {
-      if (tests.length !== mockUnitTests.length || !tests.every((t, i) => t.id === mockUnitTests[i]?.id && t.status === mockUnitTests[i]?.status)) {
+      // Simple check: if length differs or if IDs/statuses don't match up.
+      // More robust checks might be needed for complex scenarios.
+      if (tests.length !== mockUnitTests.length || 
+          !tests.every((t, i) => t.id === mockUnitTests[i]?.id && t.status === mockUnitTests[i]?.status)
+      ) {
         setTests([...mockUnitTests]);
       }
-    }, 1000);
+    }, 1000); // Check every second
     return () => clearInterval(interval);
-  }, [tests]);
+  }, [tests]); // Re-run effect if local tests state itself is forced to change
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
@@ -55,7 +61,7 @@ export default function TeacherTestsPage() {
     const testIndex = mockUnitTests.findIndex(t => t.id === testId);
     if (testIndex > -1 && mockUnitTests[testIndex].status === 'pending') {
       mockUnitTests[testIndex].status = 'waiting_room_open';
-      setTests([...mockUnitTests]);
+      setTests([...mockUnitTests]); // Trigger re-render
       toast({ title: "Waiting Room Opened", description: `Waiting room for "${mockUnitTests[testIndex].title}" is now open.` });
       router.push(`/teacher/tests/${testId}/waiting`);
     } else {
@@ -68,38 +74,30 @@ export default function TeacherTestsPage() {
     if (testIndex > -1 && (mockUnitTests[testIndex].status === 'active' || mockUnitTests[testIndex].status === 'waiting_room_open')) {
       mockUnitTests[testIndex].status = 'completed';
       mockUnitTests[testIndex].endTime = new Date();
-      setTests([...mockUnitTests]);
+      setTests([...mockUnitTests]); // Trigger re-render
       toast({ title: "Test Ended", description: `Test "${mockUnitTests[testIndex].title}" has been marked as completed.` });
     } else {
       toast({ title: "Error", description: "Test could not be ended. It might not be active or in waiting room.", variant: "destructive" });
     }
   };
 
-  const handleDeleteClick = (test: UnitTest) => {
-    setTestToDelete(test);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const confirmDeleteTest = () => {
-    if (testToDelete) {
-      const testIndex = mockUnitTests.findIndex(t => t.id === testToDelete.id);
-      if (testIndex > -1) {
-        mockUnitTests.splice(testIndex, 1);
-        setTests([...mockUnitTests]);
-        toast({ title: "Test Deleted", description: `Test "${testToDelete.title}" has been deleted.` });
-      } else {
-        toast({ title: "Error", description: "Test not found for deletion.", variant: "destructive" });
-      }
+  const confirmDeleteTest = (testIdToDelete: string) => {
+    const testIndex = mockUnitTests.findIndex(t => t.id === testIdToDelete);
+    if (testIndex > -1) {
+      const deletedTestTitle = mockUnitTests[testIndex].title;
+      mockUnitTests.splice(testIndex, 1);
+      setTests([...mockUnitTests]); // Trigger re-render
+      toast({ title: "Test Deleted", description: `Test "${deletedTestTitle}" has been deleted.` });
+    } else {
+      toast({ title: "Error", description: "Test not found for deletion.", variant: "destructive" });
     }
-    setIsDeleteDialogOpen(false);
-    setTestToDelete(null);
   };
   
   const getStatusBadgeVariant = (status: UnitTest['status']) => {
     switch (status) {
       case 'pending': return 'outline';
-      case 'waiting_room_open': return 'default';
-      case 'active': return 'secondary';
+      case 'waiting_room_open': return 'default'; // Using default (primary) for more visibility
+      case 'active': return 'secondary'; // Using secondary for active
       case 'completed': return 'destructive';
       default: return 'outline';
     }
@@ -182,11 +180,28 @@ export default function TeacherTestsPage() {
                           <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (Coming Soon for pending tests)" disabled={test.status !== 'pending'}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(test)} title="Delete Test">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </AlertDialogTrigger>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" title="Delete Test">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the test
+                                    "{test.title}".
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => confirmDeleteTest(test.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
                         </TableCell>
                       </TableRow>
                     );
@@ -197,26 +212,7 @@ export default function TeacherTestsPage() {
           </CardContent>
         </Card>
       </div>
-
-      {testToDelete && (
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the test
-                  "{testToDelete.title}".
-              </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDeleteTest} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
     </>
   );
 }
-
 
