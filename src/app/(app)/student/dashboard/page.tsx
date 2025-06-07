@@ -7,11 +7,10 @@ import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
 import type { Unit, UnitTest, Message } from '@/types';
 import Image from 'next/image';
-import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, AlertTriangle, Info, GraduationCap, Hourglass } from 'lucide-react';
+import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, Info, GraduationCap, Hourglass, ListChecks } from 'lucide-react'; // Removed AlertTriangle as Alert is removed
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
-import { mockUnitTests, getMockMessages, mockStudents } from '@/lib/mock-data';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { mockUnitTests, getMockMessages } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,7 +31,7 @@ export default function StudentDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [progressSummary, setProgressSummary] = useState<StudentProgressSummary | null>(null);
-  const [activeTestNotification, setActiveTestNotification] = useState<UnitTest | null>(null);
+  const [joinableTests, setJoinableTests] = useState<UnitTest[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   useEffect(() => {
@@ -56,32 +55,28 @@ export default function StudentDashboardPage() {
     if (!studentData) return;
 
     const interval = setInterval(() => {
-      const currentMockSnapshot = mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status}));
-      console.log("[Student Dashboard Interval Check] Checking for active tests. mockUnitTests snapshot:", JSON.stringify(currentMockSnapshot));
+      // Fetch the current state of mockUnitTests
+      const currentTestsSnapshot = mockUnitTests.map(t => ({...t})); // Create shallow copies
 
-      const relevantTest = mockUnitTests.find(test =>
+      const relevantTests = currentTestsSnapshot.filter(test =>
         (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
         (!test.forGroupId /* add group check if implemented */ )
       );
+      
+      // Update state only if the list of relevant tests (IDs and statuses) has changed
+      setJoinableTests(prevTests => {
+        const relevantTestIdsAndStatuses = relevantTests.map(t => `${t.id}-${t.status}`).sort().join(',');
+        const prevTestIdsAndStatuses = prevTests.map(t => `${t.id}-${t.status}`).sort().join(',');
+        if (relevantTestIdsAndStatuses !== prevTestIdsAndStatuses) {
+          return relevantTests;
+        }
+        return prevTests;
+      });
 
-      if (relevantTest) {
-        console.log("[Student Dashboard Interval Check] Relevant test found:", {id: relevantTest.id, status: relevantTest.status, title: relevantTest.title});
-        // Create a new object to ensure React detects the change if relevantTest content changed
-        setActiveTestNotification(prev => {
-            if(prev?.id !== relevantTest.id || prev?.status !== relevantTest.status){
-                return {...relevantTest};
-            }
-            return prev;
-        });
-      } else {
-        console.log("[Student Dashboard Interval Check] No relevant test found with status waiting_room_open or active.");
-        setActiveTestNotification(null);
-      }
-    }, 2000);
+    }, 2000); // Check every 2 seconds
 
     return () => {
-      console.log("[Student Dashboard] Clearing test check interval.");
       clearInterval(interval);
     };
   }, [studentData]);
@@ -98,7 +93,7 @@ export default function StudentDashboardPage() {
     if (pendingTestIndex !== -1) {
       mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
       toast({ title: "Waiting Room Now Open (Simulated)", description: `Test "${mockUnitTests[pendingTestIndex].title}" is ready to join.`});
-      console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
+      // console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
     } else {
       toast({ title: "No Pending Test Found", description: "Could not find a 'pending' test to open for simulation.", variant: "default" });
     }
@@ -115,7 +110,7 @@ export default function StudentDashboardPage() {
         mockUnitTests[waitingTestIndex].status = 'active';
         mockUnitTests[waitingTestIndex].startTime = new Date();
         toast({ title: "Test Now Active (Simulated)", description: `Test "${mockUnitTests[waitingTestIndex].title}" has started.`});
-        console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
+        // console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
      } else {
         const activeTest = mockUnitTests.find(test => test.status === 'active' && (!test.forStudentId || test.forStudentId === studentData.id));
         if(activeTest) {
@@ -132,54 +127,6 @@ export default function StudentDashboardPage() {
 
   const unlockedUnits = courseUnits.filter(unit => !isUnitActuallyLocked(unit));
   const lockedUnitsCount = courseUnits.length - unlockedUnits.length;
-
-  const getNotificationAlert = () => {
-    if (!activeTestNotification) return null;
-
-    let title = "";
-    let description = "";
-    let buttonText = "";
-    let buttonAction = () => {};
-    let icon = <AlertTriangle className="h-5 w-5 text-primary" />;
-
-    if (activeTestNotification.status === 'waiting_room_open') {
-      title = "Test Waiting Room Open!";
-      description = `The waiting room for "${activeTestNotification.title}" is now open.`;
-      buttonText = "Join Waiting Room";
-      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
-      icon = <Hourglass className="h-5 w-5 text-primary animate-pulse" />;
-    } else if (activeTestNotification.status === 'active') {
-      title = "Test In Progress!";
-      description = `"${activeTestNotification.title}" is currently active.`;
-      buttonText = "Go to Test";
-      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
-      icon = <PlayCircle className="h-5 w-5 text-green-500" />;
-    } else {
-        return null;
-    }
-
-    return (
-      <Alert className="mb-6 border-primary shadow-lg">
-        <div className="flex items-start gap-3">
-            {icon}
-            <div className="flex-1">
-                <AlertTitle className="font-headline text-lg text-primary">{title}</AlertTitle>
-                <AlertDescription className="text-foreground text-sm">
-                {description}
-                </AlertDescription>
-            </div>
-        </div>
-        <Button
-            onClick={buttonAction}
-            className="mt-3 w-full sm:w-auto ml-auto block sm:ml-0 sm:inline-block"
-            size="sm"
-        >
-            {buttonText}
-        </Button>
-      </Alert>
-    );
-  };
-
   const assignedTestsCount = mockUnitTests.filter(t => !t.forStudentId || t.forStudentId === studentData.id).length;
 
 
@@ -187,7 +134,44 @@ export default function StudentDashboardPage() {
     <div className="container mx-auto py-8 px-4 md:px-6">
       <h1 className="text-3xl font-headline mb-8 text-foreground">Welcome, {studentData.name}!</h1>
 
-      {getNotificationAlert()}
+      {joinableTests.length > 0 && (
+        <Card className="mb-8 shadow-xl border-2 border-primary bg-primary/5">
+          <CardHeader>
+            <CardTitle className="font-headline text-2xl text-primary flex items-center">
+              <ListChecks className="mr-3 h-7 w-7" />
+              Active Tests & Waiting Rooms
+            </CardTitle>
+            <CardDescription className="text-primary/80">
+              You have tests that are open or currently active. Join them now!
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {joinableTests.map(test => (
+              <Card key={test.id} className="bg-background shadow-md hover:shadow-lg transition-shadow">
+                <CardContent className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="font-semibold text-lg text-foreground">{test.title}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Status: <span className={`font-medium ${test.status === 'active' ? 'text-green-600 dark:text-green-500' : 'text-orange-600 dark:text-orange-500'}`}>
+                                {test.status === 'active' ? 'Active - In Progress' : 'Waiting Room Open'}
+                              </span>
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => router.push(`/student/tests/${test.id}/waiting`)}
+                    size="sm"
+                    variant={test.status === 'active' ? 'default' : 'outline'}
+                    className="w-full sm:w-auto mt-2 sm:mt-0"
+                  >
+                    {test.status === 'active' ? <PlayCircle className="mr-2 h-4 w-4" /> : <Hourglass className="mr-2 h-4 w-4" />}
+                    {test.status === 'active' ? 'Go to Test' : 'Join Waiting Room'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-8 shadow-md">
         <CardHeader>
@@ -276,13 +260,13 @@ export default function StudentDashboardPage() {
                 </div>
                 <p className="text-xs text-muted-foreground text-right">{unitProgress?.overallCompletion.toFixed(0) ?? 0}% Complete</p>
               </CardContent>
-              {/* <CardFooter className="pt-0">
+              <CardFooter className="pt-0">
                  <Link href={`/student/units/${unit.id}`} passHref className="w-full">
                   <Button className="w-full" variant={isCompleted ? "secondary" : "default"}>
                     {isCompleted ? 'Review Unit' : 'Start Learning'}
                   </Button>
                 </Link>
-              </CardFooter> */}
+              </CardFooter>
             </Card>
           );
         })}
@@ -298,7 +282,7 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
+    
 
 
 
