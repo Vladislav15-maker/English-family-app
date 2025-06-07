@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Eye, ListChecks, Users, Hourglass, SquarePlay, PowerOff } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, ListChecks, Users, Hourglass, PlayCircle, PowerOff, Send } from 'lucide-react'; // Added Send icon
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -68,35 +68,31 @@ export default function TeacherTestsPage() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // Create a shallow copy to help React detect changes if test statuses are updated externally
       const currentMockSnapshot = [...mockUnitTests];
       
-      // More robust check: compare lengths or stringified versions if complex objects change
       if (tests.length !== currentMockSnapshot.length || 
           !tests.every((t, i) => t.id === currentMockSnapshot[i]?.id && t.status === currentMockSnapshot[i]?.status)
       ) {
-        // console.log('[TeacherTestsPage] Interval: Detected change in mockUnitTests. Updating local state.');
         setTests(currentMockSnapshot);
       }
-    }, 1000); // Check every second
+    }, 1000); 
     return () => {
-        // console.log('[TeacherTestsPage] Clearing tests polling interval.');
         clearInterval(interval);
     }
-  }, [tests]); // Re-run effect if local 'tests' state changes (e.g., after deletion)
+  }, [tests]); 
 
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
   }
 
-  const handleOpenWaitingRoom = (testId: string) => {
+  const handleMakeJoinable = (testId: string) => {
     const testIndex = mockUnitTests.findIndex(t => t.id === testId);
     if (testIndex > -1 && mockUnitTests[testIndex].status === 'pending') {
       mockUnitTests[testIndex].status = 'waiting_room_open';
       setTests([...mockUnitTests]); 
-      console.log('[TeacherTestsPage] mockUnitTests after opening waiting room:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
-      toast({ title: "Waiting Room Opened", description: `Waiting room for "${mockUnitTests[testIndex].title}" is now open.` });
+      console.log('[TeacherTestsPage] mockUnitTests after making test joinable:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
+      toast({ title: "Test Is Joinable", description: `Waiting room for "${mockUnitTests[testIndex].title}" is now open. Students can join.` });
       router.push(`/teacher/tests/${testId}/waiting`);
     } else {
       toast({ title: "Error", description: "Could not open waiting room. Test might not be pending or already open/active.", variant: "destructive" });
@@ -135,7 +131,7 @@ export default function TeacherTestsPage() {
       case 'pending': return 'outline';
       case 'waiting_room_open': return 'default'; 
       case 'active': return 'secondary'; 
-      case 'completed': return 'destructive'; // Or perhaps a less "error-like" variant like 'success' if you add one
+      case 'completed': return 'destructive'; 
       default: return 'outline';
     }
   };
@@ -161,7 +157,7 @@ export default function TeacherTestsPage() {
         <Card className="shadow-xl">
           <CardHeader>
             <CardTitle>Test Overview</CardTitle>
-            <CardDescription>List of all configured tests. Open waiting rooms for pending tests or end active/waiting ones.</CardDescription>
+            <CardDescription>List of all configured tests. Make tests joinable, or end active/waiting ones.</CardDescription>
           </CardHeader>
           <CardContent>
             {tests.length === 0 ? (
@@ -194,8 +190,8 @@ export default function TeacherTestsPage() {
                         <TableCell>{test.assignedDate ? format(new Date(test.assignedDate), 'PP') : 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
                           {test.status === 'pending' && (
-                            <Button variant="outline" size="sm" onClick={() => handleOpenWaitingRoom(test.id)} title="Open Waiting Room">
-                              <Hourglass className="h-4 w-4 mr-1" /> Open Waiting
+                            <Button variant="outline" size="sm" onClick={() => handleMakeJoinable(test.id)} title="Make test joinable and open waiting room">
+                              <Send className="h-4 w-4 mr-1" /> Make Joinable
                             </Button>
                           )}
                           {test.status === 'waiting_room_open' && (
@@ -203,7 +199,7 @@ export default function TeacherTestsPage() {
                               <Button variant="default" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/waiting`)} title="Go to Waiting Room">
                                   <Users className="h-4 w-4 mr-1" /> Go to Waiting
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => handleEndTest(test.id)} title="End Test & Close Waiting Room" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive">
+                              <Button variant="outline" size="sm" onClick={() => handleEndTest(test.id)} title="End Test &amp; Close Waiting Room" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive">
                                   <PowerOff className="h-4 w-4 mr-1" /> End Test
                               </Button>
                             </>
@@ -233,4 +229,5 @@ export default function TeacherTestsPage() {
     </>
   );
 }
+
 
