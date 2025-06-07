@@ -10,7 +10,7 @@ import Image from 'next/image';
 import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, AlertTriangle, Info, GraduationCap, Hourglass } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
-import { mockUnitTests, getMockMessages, mockStudents } from '@/lib/mock-data'; // Added mockStudents
+import { mockUnitTests, getMockMessages, mockStudents } from '@/lib/mock-data'; 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -51,7 +51,9 @@ export default function StudentDashboardPage() {
     if (!studentData) return;
 
     const interval = setInterval(() => {
-      console.log("[Student Dashboard Interval Check] Checking for active tests...");
+      // Log the current state of mockUnitTests as seen by this interval
+      console.log("[Student Dashboard Interval Check] Checking for active tests. mockUnitTests snapshot:", JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
+
       const relevantTest = mockUnitTests.find(test => 
         (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
@@ -59,13 +61,12 @@ export default function StudentDashboardPage() {
       );
       
       if (relevantTest) {
-        console.log("[Student Dashboard Interval Check] Relevant test found:", {id: relevantTest.id, status: relevantTest.status});
-        // Create a new object to ensure React detects the change if status updated
+        console.log("[Student Dashboard Interval Check] Relevant test found:", {id: relevantTest.id, status: relevantTest.status, title: relevantTest.title});
         setActiveTestNotification(prev => {
             if(prev?.id !== relevantTest.id || prev?.status !== relevantTest.status){
-                return {...relevantTest};
+                return {...relevantTest}; // Create a new object
             }
-            return prev;
+            return prev; // Keep existing object if no change to relevant properties
         });
       } else {
         console.log("[Student Dashboard Interval Check] No relevant test found with status waiting_room_open or active.");
@@ -73,17 +74,28 @@ export default function StudentDashboardPage() {
       }
     }, 2000); 
 
-    return () => clearInterval(interval);
-  }, [studentData]); // Rerun if studentData changes
+    return () => {
+      console.log("[Student Dashboard] Clearing test check interval.");
+      clearInterval(interval);
+    };
+  }, [studentData]); 
 
 
   const simulateTeacherOpensWaitingRoom = () => {
     if (!studentData) return;
-    const pendingTestIndex = mockUnitTests.findIndex(test => test.status === 'pending' && (!test.forStudentId || test.forStudentId === studentData.id));
+    // Find a test that is 'pending' and relevant to this student
+    const pendingTestIndex = mockUnitTests.findIndex(test => 
+        test.status === 'pending' && 
+        (!test.forStudentId || test.forStudentId === studentData.id) &&
+        (!test.forGroupId) // Assuming no group logic for now
+    );
+
     if (pendingTestIndex !== -1) {
       mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
-      // setActiveTestNotification({...mockUnitTests[pendingTestIndex]}); // Update notification state
+      // The interval useEffect should pick this up and update activeTestNotification
       toast({ title: "Waiting Room Open (Simulated)!", description: `Test "${mockUnitTests[pendingTestIndex].title}" is now open for joining.`});
+      console.log('[Simulate] Opened waiting room for test:', mockUnitTests[pendingTestIndex].title, 'New status:', mockUnitTests[pendingTestIndex].status);
+      console.log('[Simulate] Current mockUnitTests:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
     } else {
       toast({ title: "No Pending Test", description: "No suitable pending test found for simulation.", variant: "default" });
     }
@@ -91,12 +103,18 @@ export default function StudentDashboardPage() {
   
   const simulateTeacherStartsActiveTestFromWaitingRoom = () => {
      if (!studentData) return;
-     const waitingTestIndex = mockUnitTests.findIndex(test => test.status === 'waiting_room_open' && (!test.forStudentId || test.forStudentId === studentData.id));
+     const waitingTestIndex = mockUnitTests.findIndex(test => 
+        test.status === 'waiting_room_open' && 
+        (!test.forStudentId || test.forStudentId === studentData.id) &&
+        (!test.forGroupId)
+    );
      if (waitingTestIndex !== -1) {
         mockUnitTests[waitingTestIndex].status = 'active';
         mockUnitTests[waitingTestIndex].startTime = new Date();
-        // setActiveTestNotification({...mockUnitTests[waitingTestIndex]}); // Update notification state
+        // The interval useEffect should pick this up
         toast({ title: "Test Active (Simulated)!", description: `Test "${mockUnitTests[waitingTestIndex].title}" is now active.`});
+        console.log('[Simulate] Started test:', mockUnitTests[waitingTestIndex].title, 'New status:', mockUnitTests[waitingTestIndex].status);
+        console.log('[Simulate] Current mockUnitTests:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
      } else {
         const activeTest = mockUnitTests.find(test => test.status === 'active' && (!test.forStudentId || test.forStudentId === studentData.id));
         if(activeTest) {
@@ -107,7 +125,7 @@ export default function StudentDashboardPage() {
      }
   };
 
-  if (!studentData || !user) { // Added !user check for completeness
+  if (!studentData || !user) { 
     return <div className="text-center p-8">Loading student data...</div>;
   }
   
@@ -132,8 +150,9 @@ export default function StudentDashboardPage() {
     } else if (activeTestNotification.status === 'active') {
       title = "Test In Progress!";
       description = `The test "${activeTestNotification.title}" is currently active.`;
-      buttonText = "Go to Test (Interface Coming Soon)"; 
-      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); // Should eventually go to test taking page
+      // If student is already in waiting room, they get redirected. If not, they can join active test via waiting page first.
+      buttonText = "Go to Test"; 
+      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); 
       icon = <PlayCircle className="h-5 w-5 text-green-500" />;
     } else {
         return null; 
@@ -141,18 +160,22 @@ export default function StudentDashboardPage() {
 
     return (
       <Alert className="mb-6 border-primary shadow-lg">
-        {icon}
-        <AlertTitle className="font-headline text-xl text-primary">{title}</AlertTitle>
-        <AlertDescription className="text-foreground">
-          {description}
-          <Button 
+        <div className="flex items-center gap-3">
+            {icon}
+            <div>
+                <AlertTitle className="font-headline text-lg text-primary">{title}</AlertTitle>
+                <AlertDescription className="text-foreground text-sm">
+                {description}
+                </AlertDescription>
+            </div>
+        </div>
+        <Button 
             onClick={buttonAction} 
-            className="mt-3 w-full sm:w-auto ml-0 sm:ml-4"
+            className="mt-3 w-full sm:w-auto"
             size="sm"
-          >
+        >
             {buttonText}
-          </Button>
-        </AlertDescription>
+        </Button>
       </Alert>
     );
   };
@@ -172,13 +195,13 @@ export default function StudentDashboardPage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
             <Button onClick={simulateTeacherOpensWaitingRoom} variant="outline" size="sm">
-                Simulate Teacher Opens Waiting Room
+                Simulate Teacher Opens Waiting Room (for a 'pending' test)
             </Button>
             <Button onClick={simulateTeacherStartsActiveTestFromWaitingRoom} variant="outline" size="sm">
-                Simulate Teacher Starts Active Test
+                Simulate Teacher Starts Active Test (from 'waiting_room_open')
             </Button>
             <p className="text-xs text-muted-foreground mt-2 w-full">
-                These buttons simulate teacher actions for testing notifications and only affect tests in 'pending' or 'waiting_room_open' states respectively.
+                These buttons simulate teacher actions for testing notifications. They affect the first suitable test.
             </p>
         </CardContent>
       </Card>
@@ -210,7 +233,7 @@ export default function StudentDashboardPage() {
           <CardContent>
              <p className="text-2xl font-semibold text-secondary-foreground">{assignedTestsCount}</p>
              <p className="text-sm text-muted-foreground">tests assigned</p>
-             <Link href="/student/tests"><Button variant="link" className="p-0 h-auto">View Tests</Button></Link>
+             <Link href="/student/tests"><Button variant="link" className="p-0 h-auto text-sm">View Tests</Button></Link>
           </CardContent>
         </Card>
          <Card className="shadow-lg hover:shadow-xl transition-shadow">
@@ -219,7 +242,7 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
              <p className="text-2xl font-semibold text-secondary-foreground">{unreadMessagesCount}</p>
-             <Link href="/messages"><Button variant="link" className="p-0 h-auto">{unreadMessagesCount > 0 ? `View ${unreadMessagesCount} new message${unreadMessagesCount > 1 ? 's' : ''}` : "View Messages"}</Button></Link>
+             <Link href="/messages"><Button variant="link" className="p-0 h-auto text-sm">{unreadMessagesCount > 0 ? `View ${unreadMessagesCount} new message${unreadMessagesCount > 1 ? 's' : ''}` : "View Messages"}</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -244,22 +267,22 @@ export default function StudentDashboardPage() {
               </CardHeader>
               <CardContent className="pt-4 flex-grow">
                 <CardTitle className="font-headline text-xl mb-1">{unit.title}</CardTitle>
-                <CardDescription className="text-muted-foreground mb-2">{unit.description}</CardDescription>
+                <CardDescription className="text-muted-foreground mb-2 text-sm">{unit.description}</CardDescription>
                 <div className="w-full bg-muted rounded-full h-2.5 mb-2">
                   <div 
                     className="bg-primary h-2.5 rounded-full" 
                     style={{ width: `${unitProgress?.overallCompletion.toFixed(0) ?? 0}%` }}
                   ></div>
                 </div>
-                <p className="text-sm text-muted-foreground text-right">{unitProgress?.overallCompletion.toFixed(0) ?? 0}% Complete</p>
+                <p className="text-xs text-muted-foreground text-right">{unitProgress?.overallCompletion.toFixed(0) ?? 0}% Complete</p>
               </CardContent>
-              <CardContent className="pt-0">
-                 <Link href={`/student/units/${unit.id}`} passHref>
+              <CardFooter className="pt-0">
+                 <Link href={`/student/units/${unit.id}`} passHref className="w-full">
                   <Button className="w-full" variant={isCompleted ? "secondary" : "default"}>
                     {isCompleted ? 'Review Unit' : 'Start Learning'}
                   </Button>
                 </Link>
-              </CardContent>
+              </CardFooter>
             </Card>
           );
         })}
@@ -268,12 +291,13 @@ export default function StudentDashboardPage() {
            <Card key={`locked-${index}`} className="overflow-hidden shadow-lg bg-muted/50 flex flex-col items-center justify-center p-6">
             <Lock className="h-12 w-12 text-muted-foreground mb-4" />
             <CardTitle className="font-headline text-xl mb-1 text-muted-foreground">Unit Locked</CardTitle>
-            <CardDescription className="text-center text-muted-foreground">This unit will be available soon. Keep up the great work!</CardDescription>
+            <CardDescription className="text-center text-muted-foreground text-sm">This unit will be available soon. Keep up the great work!</CardDescription>
           </Card>
         ))}
       </div>
     </div>
   );
 }
+
 
     

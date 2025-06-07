@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Square, Edit, Trash2, Eye, ListChecks, Users, Hourglass } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, ListChecks, Users, Hourglass, SquarePlay, PowerOff } from 'lucide-react'; // Replaced Square with SquarePlay for Start, PowerOff for End
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import {
@@ -30,28 +30,23 @@ export default function TeacherTestsPage() {
   const { teacherData } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  // Local state to manage the list of tests, initialized from mockUnitTests
-  // This allows the component to re-render when mockUnitTests is modified externally (e.g., on create)
   const [tests, setTests] = useState<UnitTest[]>([]);
 
   useEffect(() => {
-    setTests([...mockUnitTests]); // Initialize with a copy
+    setTests([...mockUnitTests]); 
   }, []);
 
-  // Periodically check mockUnitTests for changes and update local state if necessary
-  // This simulates reactivity to external changes to the mock data.
   useEffect(() => {
     const interval = setInterval(() => {
-      // Simple check: if length differs or if IDs/statuses don't match up.
-      // More robust checks might be needed for complex scenarios.
-      if (tests.length !== mockUnitTests.length || 
-          !tests.every((t, i) => t.id === mockUnitTests[i]?.id && t.status === mockUnitTests[i]?.status)
+      const currentMockSnapshot = [...mockUnitTests];
+      if (tests.length !== currentMockSnapshot.length || 
+          !tests.every((t, i) => t.id === currentMockSnapshot[i]?.id && t.status === currentMockSnapshot[i]?.status)
       ) {
-        setTests([...mockUnitTests]);
+        setTests(currentMockSnapshot);
       }
-    }, 1000); // Check every second
+    }, 1000); 
     return () => clearInterval(interval);
-  }, [tests]); // Re-run effect if local tests state itself is forced to change
+  }, [tests]); 
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
@@ -61,7 +56,8 @@ export default function TeacherTestsPage() {
     const testIndex = mockUnitTests.findIndex(t => t.id === testId);
     if (testIndex > -1 && mockUnitTests[testIndex].status === 'pending') {
       mockUnitTests[testIndex].status = 'waiting_room_open';
-      setTests([...mockUnitTests]); // Trigger re-render
+      setTests([...mockUnitTests]); 
+      console.log('[TeacherTestsPage] mockUnitTests after opening waiting room:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
       toast({ title: "Waiting Room Opened", description: `Waiting room for "${mockUnitTests[testIndex].title}" is now open.` });
       router.push(`/teacher/tests/${testId}/waiting`);
     } else {
@@ -72,10 +68,12 @@ export default function TeacherTestsPage() {
   const handleEndTest = (testId: string) => {
     const testIndex = mockUnitTests.findIndex(t => t.id === testId);
     if (testIndex > -1 && (mockUnitTests[testIndex].status === 'active' || mockUnitTests[testIndex].status === 'waiting_room_open')) {
+      const oldStatus = mockUnitTests[testIndex].status;
       mockUnitTests[testIndex].status = 'completed';
       mockUnitTests[testIndex].endTime = new Date();
-      setTests([...mockUnitTests]); // Trigger re-render
-      toast({ title: "Test Ended", description: `Test "${mockUnitTests[testIndex].title}" has been marked as completed.` });
+      setTests([...mockUnitTests]); 
+      console.log('[TeacherTestsPage] mockUnitTests after ending test:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
+      toast({ title: "Test Ended", description: `Test "${mockUnitTests[testIndex].title}" (was ${oldStatus}) has been marked as completed.` });
     } else {
       toast({ title: "Error", description: "Test could not be ended. It might not be active or in waiting room.", variant: "destructive" });
     }
@@ -86,8 +84,9 @@ export default function TeacherTestsPage() {
     if (testIndex > -1) {
       const deletedTestTitle = mockUnitTests[testIndex].title;
       mockUnitTests.splice(testIndex, 1);
-      setTests([...mockUnitTests]); // Trigger re-render
-      toast({ title: "Test Deleted", description: `Test "${deletedTestTitle}" has been deleted.` });
+      setTests([...mockUnitTests]); 
+      console.log('[TeacherTestsPage] mockUnitTests after deleting test:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
+      toast({ title: "Test Deleted", description: `Test "${deletedTestTitle}" has been deleted.`, variant: "destructive" });
     } else {
       toast({ title: "Error", description: "Test not found for deletion.", variant: "destructive" });
     }
@@ -96,8 +95,8 @@ export default function TeacherTestsPage() {
   const getStatusBadgeVariant = (status: UnitTest['status']) => {
     switch (status) {
       case 'pending': return 'outline';
-      case 'waiting_room_open': return 'default'; // Using default (primary) for more visibility
-      case 'active': return 'secondary'; // Using secondary for active
+      case 'waiting_room_open': return 'default'; 
+      case 'active': return 'secondary'; 
       case 'completed': return 'destructive';
       default: return 'outline';
     }
@@ -124,7 +123,7 @@ export default function TeacherTestsPage() {
         <Card className="shadow-xl">
           <CardHeader>
             <CardTitle>Test Overview</CardTitle>
-            <CardDescription>List of all configured tests. Open waiting rooms for pending tests or end active ones.</CardDescription>
+            <CardDescription>List of all configured tests. Open waiting rooms for pending tests or end active/waiting ones.</CardDescription>
           </CardHeader>
           <CardContent>
             {tests.length === 0 ? (
@@ -133,12 +132,13 @@ export default function TeacherTestsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Title</TableHead>
+                    <TableHead className="min-w-[200px]">Title</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Duration</TableHead>
+                    <TableHead className="text-center">Questions</TableHead>
+                    <TableHead className="text-center">Duration</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-right min-w-[280px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -149,9 +149,10 @@ export default function TeacherTestsPage() {
                         <TableCell className="font-medium">{test.title}</TableCell>
                         <TableCell>{unit?.title || 'N/A'}</TableCell>
                         <TableCell>
-                          <Badge variant={getStatusBadgeVariant(test.status)} className="capitalize">{test.status.replace(/_/g, ' ')}</Badge>
+                          <Badge variant={getStatusBadgeVariant(test.status)} className="capitalize whitespace-nowrap">{test.status.replace(/_/g, ' ')}</Badge>
                         </TableCell>
-                        <TableCell>{test.durationMinutes} min</TableCell>
+                        <TableCell className="text-center">{test.questions.length}</TableCell>
+                        <TableCell className="text-center">{test.durationMinutes} min</TableCell>
                         <TableCell>{test.assignedDate ? format(new Date(test.assignedDate), 'PP') : 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
                           {test.status === 'pending' && (
@@ -164,26 +165,26 @@ export default function TeacherTestsPage() {
                               <Button variant="default" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/waiting`)} title="Go to Waiting Room">
                                   <Users className="h-4 w-4 mr-1" /> Go to Waiting
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => handleEndTest(test.id)} title="End Test (Cancel Waiting Room)">
-                                  <Square className="h-4 w-4 mr-1" /> End
+                              <Button variant="outline" color="destructive" size="sm" onClick={() => handleEndTest(test.id)} title="End Test & Close Waiting Room">
+                                  <PowerOff className="h-4 w-4 mr-1" /> End Test
                               </Button>
                             </>
                           )}
                           {test.status === 'active' && (
-                            <Button variant="destructive" size="sm" onClick={() => handleEndTest(test.id)} title="End Test">
-                              <Square className="h-4 w-4 mr-1" /> End Test
+                            <Button variant="destructive" size="sm" onClick={() => handleEndTest(test.id)} title="End Active Test">
+                              <PowerOff className="h-4 w-4 mr-1" /> End Test
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/results`)} title="View Results/Submissions (Coming Soon)">
+                          <Button variant="ghost" size="icon" onClick={() => router.push(`/teacher/tests/${test.id}/results`)} title="View Results (Coming Soon)">
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (Coming Soon for pending tests)" disabled={test.status !== 'pending'}>
+                          <Button variant="ghost" size="icon" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (Coming Soon for pending tests)" disabled={test.status !== 'pending'}>
                             <Edit className="h-4 w-4" />
                           </Button>
                           
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" title="Delete Test">
+                              <Button variant="ghost" size="icon" title="Delete Test" disabled={test.status === 'active'}>
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
                             </AlertDialogTrigger>
@@ -192,7 +193,7 @@ export default function TeacherTestsPage() {
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
                                     This action cannot be undone. This will permanently delete the test
-                                    "{test.title}".
+                                    "{test.title}". This action is disabled for 'active' tests.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -215,4 +216,5 @@ export default function TeacherTestsPage() {
     </>
   );
 }
+
 

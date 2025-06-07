@@ -12,36 +12,38 @@ import { useRouter } from 'next/navigation';
 import { GraduationCap, Clock, CheckCircle, ListChecks, ArrowLeft, XCircle, Hourglass, Play, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { useState, useEffect } from 'react'; // Added for live updates
+import { useState, useEffect } from 'react'; 
 
 export default function StudentTestsPage() {
   const { studentData } = useAuth();
   const router = useRouter();
-  const [tests, setTests] = useState<UnitTestType[]>([]); // Local state for tests
+  const [tests, setTests] = useState<UnitTestType[]>([]); 
 
   useEffect(() => {
-    // Initialize tests and subscribe to changes for live updates
-    setTests([...mockUnitTests]); 
+    // Set initial state
+    setTests([...mockUnitTests]);
+    console.log('[StudentTestsPage] Initializing tests state:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, status: t.status, title:t.title})))));
+
 
     const interval = setInterval(() => {
-      // This is a simple way to check for changes in mockUnitTests.
-      // In a real app, this would be handled by a state management solution or WebSocket.
-      if (mockUnitTests.some((mockTest, index) => 
-            tests[index]?.id !== mockTest.id || tests[index]?.status !== mockTest.status
-         ) || tests.length !== mockUnitTests.length
-      ) {
-        setTests([...mockUnitTests]);
-      }
-    }, 1500); // Check every 1.5 seconds
+      // Always update with a new array from the source of truth.
+      // React will diff and re-render only if necessary.
+      console.log('[StudentTestsPage] Interval: Checking mockUnitTests. Current snapshot:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, status: t.status, title:t.title})))));
+      setTests([...mockUnitTests]); 
+    }, 2500); // Check every 2.5 seconds
 
-    return () => clearInterval(interval);
-  }, [tests]); // Re-run effect if local tests state itself is forced to change
+    return () => {
+      console.log('[StudentTestsPage] Clearing tests polling interval.');
+      clearInterval(interval);
+    };
+  }, []); // Empty dependency array: run once on mount, clear on unmount.
 
 
   if (!studentData) {
     return <div className="text-center p-8">Loading student data...</div>;
   }
 
+  // Filter tests relevant to the student *after* fetching the latest from mockUnitTests
   const availableTests = tests.filter(t => !t.forStudentId || t.forStudentId === studentData.id);
 
   const getTestStatusInfo = (test: UnitTestType, studentTestProgress?: StudentRoundProgress) => {
@@ -63,7 +65,7 @@ export default function StudentTestsPage() {
     if (test.status === 'waiting_room_open') {
       return {
         text: "Waiting Room Open",
-        badgeVariant: "secondary" as const, // Green or similar for joinable
+        badgeVariant: "default" as const, 
         actionText: "Join Waiting Room",
         actionLink: `/student/tests/${test.id}/waiting`,
         actionIcon: <Users className="mr-2 h-4 w-4" />,
@@ -74,11 +76,11 @@ export default function StudentTestsPage() {
     if (test.status === 'active') {
       return { 
         text: "Active", 
-        badgeVariant: "default" as const, // Primary color for active test
-        actionText: "Test In Progress", // Placeholder for actual test taking UI
-        actionLink: `/student/tests/${test.id}/take`, // Future page
+        badgeVariant: "secondary" as const, 
+        actionText: "Go to Test", // Student should join via waiting room first usually
+        actionLink: `/student/tests/${test.id}/waiting`, 
         actionIcon: <Play className="mr-2 h-4 w-4" />, 
-        disabled: true, // Disabled until test taking page is built
+        disabled: false, 
         dateInfo: `Duration: ${test.durationMinutes} min. Test has started.`
       };
     }
@@ -92,7 +94,7 @@ export default function StudentTestsPage() {
         dateInfo: test.assignedDate ? `From: ${format(new Date(test.assignedDate), "PP")}` : "Awaiting teacher"
       };
     }
-    // Teacher marked as completed or expired (test.status === 'completed' or other)
+    
     return { 
         text: "Ended", 
         badgeVariant: "destructive" as const,
@@ -137,9 +139,9 @@ export default function StudentTestsPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="font-headline text-xl mb-1">{test.title}</CardTitle>
-                  {statusInfo.badgeVariant && <Badge variant={statusInfo.badgeVariant} className="capitalize">{statusInfo.text.split(':')[0]}</Badge>}
+                  {statusInfo.badgeVariant && <Badge variant={statusInfo.badgeVariant} className="capitalize whitespace-nowrap">{statusInfo.text.split(':')[0]}</Badge>}
                 </div>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   For Unit: {unit?.title || 'N/A'} <br />
                   {statusInfo.dateInfo}
                 </CardDescription>
@@ -147,7 +149,7 @@ export default function StudentTestsPage() {
               <CardContent className="flex-grow">
                 <p className="text-sm text-muted-foreground">
                   This test covers material from {unit?.description || test.unitId}. 
-                  It has {test.questions.length} questions.
+                  It has {test.questions.length} questions and lasts {test.durationMinutes} minutes.
                 </p>
               </CardContent>
               <CardFooter>
@@ -155,7 +157,7 @@ export default function StudentTestsPage() {
                   <Link href={statusInfo.actionLink} passHref className="w-full">
                     <Button 
                         className="w-full" 
-                        variant={studentTestProgressForThisTest?.completed ? "secondary" : (test.status === 'waiting_room_open' ? 'default' : 'outline')} 
+                        variant={studentTestProgressForThisTest?.completed ? "secondary" : (test.status === 'waiting_room_open' || test.status === 'active' ? 'default' : 'outline')} 
                         disabled={statusInfo.disabled}
                     >
                       {statusInfo.actionIcon} {statusInfo.actionText}
@@ -174,6 +176,7 @@ export default function StudentTestsPage() {
     </div>
   );
 }
+
 
 
 
