@@ -140,41 +140,58 @@ export default function CreateTestPage() {
             {selectedUnit && (
               <div className="space-y-4 p-4 border rounded-md">
                 <h3 className="text-lg font-semibold">Select Questions for "{selectedUnit.title}"</h3>
+                <p className="text-sm text-muted-foreground">Total selected: {Object.values(selectedQuestions).filter(Boolean).length}</p>
                 <ScrollArea className="h-72">
-                  {selectedUnit.vocabulary.map(vr => (
-                    <div key={vr.id} className="mb-4">
-                      <h4 className="font-medium text-primary flex items-center gap-2 mb-2"><BookOpenText/>{vr.title} (Vocabulary)</h4>
-                      {vr.words.map(word => (
-                        <div key={word.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
-                          <Checkbox
-                            id={`q-${word.id}`}
-                            checked={!!selectedQuestions[word.id]}
-                            onCheckedChange={() => handleQuestionSelection(word.id)}
-                          />
-                          <Label htmlFor={`q-${word.id}`} className="flex-1 cursor-pointer">
-                            {word.russian} ({word.english})
-                          </Label>
+                  {selectedUnit.vocabulary.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="font-medium text-primary flex items-center gap-2 mb-2 border-b pb-1"><BookOpenText size={18}/>Vocabulary Rounds</h4>
+                      {selectedUnit.vocabulary.map(vr => (
+                        <div key={vr.id} className="mb-3 pl-2">
+                          <h5 className="font-normal text-muted-foreground mb-1">{vr.title}</h5>
+                          {vr.words.map(word => (
+                            <div key={word.id} className="flex items-center space-x-2 p-1.5 hover:bg-muted/50 rounded-md">
+                              <Checkbox
+                                id={`q-${word.id}`}
+                                checked={!!selectedQuestions[word.id]}
+                                onCheckedChange={() => handleQuestionSelection(word.id)}
+                                aria-label={`Select question: ${word.russian}`}
+                              />
+                              <Label htmlFor={`q-${word.id}`} className="flex-1 cursor-pointer text-sm font-normal">
+                                {word.russian} <span className="text-xs text-muted-foreground">({word.english})</span>
+                              </Label>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
-                  {selectedUnit.grammar.map(gr => (
-                    <div key={gr.id} className="mb-4">
-                      <h4 className="font-medium text-accent flex items-center gap-2 mb-2"><Type/>{gr.title} (Grammar)</h4>
-                      {gr.questions.map(q => (
-                        <div key={q.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md">
-                          <Checkbox
-                            id={`q-${q.id}`}
-                            checked={!!selectedQuestions[q.id]}
-                            onCheckedChange={() => handleQuestionSelection(q.id)}
-                          />
-                          <Label htmlFor={`q-${q.id}`} className="flex-1 cursor-pointer">
-                            {q.question.substring(0, 50)}{q.question.length > 50 ? "..." : ""} <span className="text-xs text-muted-foreground">({q.questionType})</span>
-                          </Label>
+                  )}
+                  {selectedUnit.grammar.length > 0 && (
+                    <div className="mb-4">
+                       <h4 className="font-medium text-accent flex items-center gap-2 mb-2 border-b pb-1"><Type size={18}/>Grammar Rounds</h4>
+                      {selectedUnit.grammar.map(gr => (
+                        <div key={gr.id} className="mb-3 pl-2">
+                           <h5 className="font-normal text-muted-foreground mb-1">{gr.title}</h5>
+                          {gr.questions.map(q => (
+                            <div key={q.id} className="flex items-center space-x-2 p-1.5 hover:bg-muted/50 rounded-md">
+                              <Checkbox
+                                id={`q-${q.id}`}
+                                checked={!!selectedQuestions[q.id]}
+                                onCheckedChange={() => handleQuestionSelection(q.id)}
+                                aria-label={`Select question: ${q.question.substring(0,50)}`}
+                              />
+                              <Label htmlFor={`q-${q.id}`} className="flex-1 cursor-pointer text-sm font-normal">
+                                {q.question.substring(0, 60)}{q.question.length > 60 ? "..." : ""} 
+                                <span className="text-xs text-muted-foreground"> ({q.questionType.replace('-', ' ')})</span>
+                              </Label>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
+                  )}
+                  {selectedUnit.vocabulary.length === 0 && selectedUnit.grammar.length === 0 && (
+                    <p className="text-sm text-muted-foreground">This unit has no vocabulary or grammar questions defined yet.</p>
+                  )}
                 </ScrollArea>
               </div>
             )}
@@ -185,14 +202,18 @@ export default function CreateTestPage() {
                 id="durationMinutes"
                 type="number"
                 value={durationMinutes}
-                onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10))}
+                onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (val > 0) setDurationMinutes(val);
+                    else if (e.target.value === "") setDurationMinutes(0); // Allow empty or set to a default minimum
+                }}
                 min="1"
                 required
               />
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full md:w-auto" disabled={!selectedUnit}>
+            <Button type="submit" className="w-full md:w-auto" disabled={!selectedUnit || Object.values(selectedQuestions).filter(Boolean).length === 0}>
               Create Test
             </Button>
           </CardFooter>
@@ -200,3 +221,4 @@ export default function CreateTestPage() {
       </Card>
     </div>
   );
+}
