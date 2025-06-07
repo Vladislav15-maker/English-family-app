@@ -37,9 +37,8 @@ export default function VocabularyPracticePage() {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const [isSpeakingAllowed, setIsSpeakingAllowed] = useState(false);
 
-  const unit = getUnitById(unitId);
-  const vocabRound = getVocabRoundById(unitId, roundId);
 
   const speakWord = useCallback((text: string, lang: string = 'en-US') => {
     if (!('speechSynthesis' in window)) {
@@ -59,16 +58,15 @@ export default function VocabularyPracticePage() {
         variant: "default",
       });
       console.warn("Attempted to speak before voices fully loaded or if loading failed.");
-       // Try to trigger voice loading again, just in case
-      window.speechSynthesis.getVoices();
+      window.speechSynthesis.getVoices(); // Try to trigger voice loading again
       return;
     }
     
+    // If speaking, cancel before starting new utterance
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
         console.warn("Speech synthesis is already speaking or pending. Cancelling previous utterances.");
-        window.speechSynthesis.cancel(); // Cancel any ongoing or pending speech
+        window.speechSynthesis.cancel(); 
     }
-
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang; 
@@ -76,13 +74,11 @@ export default function VocabularyPracticePage() {
     const allVoices = window.speechSynthesis.getVoices();
     console.log("Available voices at speakWord call:", allVoices); 
 
-    let englishVoice = allVoices.find(voice => voice.lang.startsWith('en') && voice.default);
-    if (!englishVoice) {
-      englishVoice = allVoices.find(voice => voice.lang.startsWith('en'));
-    }
-     if (!englishVoice && allVoices.length > 0) { // If still no specific English voice, try any available for the lang
-      englishVoice = allVoices.find(voice => voice.lang === lang);
-    }
+    let englishVoice = allVoices.find(voice => voice.lang === 'en-US' && voice.default);
+    if (!englishVoice) englishVoice = allVoices.find(voice => voice.lang.startsWith('en-') && voice.default);
+    if (!englishVoice) englishVoice = allVoices.find(voice => voice.lang === 'en-US');
+    if (!englishVoice) englishVoice = allVoices.find(voice => voice.lang.startsWith('en-'));
+    if (!englishVoice && allVoices.length > 0) englishVoice = allVoices.find(voice => voice.lang === lang);
 
 
     if (englishVoice) {
@@ -117,10 +113,10 @@ export default function VocabularyPracticePage() {
       });
     };
     
-    // Short delay to ensure cancel has time to process if called
+    // Add a small delay after cancel before speaking
     setTimeout(() => {
         window.speechSynthesis.speak(utterance);
-    }, 50);
+    }, 100); // 100ms delay
 
   }, [toast, voicesLoaded]);
 
@@ -132,18 +128,25 @@ export default function VocabularyPracticePage() {
         variant: "destructive",
       });
       console.error("Speech synthesis not supported on mount.");
+      setIsSpeakingAllowed(false);
       return; 
     }
     
-    const onVoicesChanged = () => {
+    let voiceRetryTimeout: NodeJS.Timeout | null = null;
+
+    const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
-      console.log("Voices changed/loaded by event:", voices);
       if (voices.length > 0) {
+        console.log("Voices changed/loaded by event:", voices);
         setVoicesLoaded(true);
+        setIsSpeakingAllowed(true); 
         console.log("Voices are now loaded.");
+        if(voiceRetryTimeout) clearTimeout(voiceRetryTimeout);
       } else {
-        setVoicesLoaded(false); // Should not happen if event fires with voices
-        console.warn("voiceschanged event fired, but no voices available yet.");
+        console.warn("voiceschanged event fired, but no voices available yet or getVoices() returned empty.");
+        // Retry loading voices after a short delay if still not loaded
+        if (voiceRetryTimeout) clearTimeout(voiceRetryTimeout);
+        voiceRetryTimeout = setTimeout(loadVoices, 250); // Retry after 250ms
       }
     };
     
@@ -151,17 +154,19 @@ export default function VocabularyPracticePage() {
     if (initialVoices.length > 0) {
       console.log("Initial voices already available:", initialVoices);
       setVoicesLoaded(true);
+      setIsSpeakingAllowed(true);
     } else {
-      console.log("Initially no voices, attaching voiceschanged listener.");
-      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+      console.log("Initially no voices, attaching voiceschanged listener and attempting to load.");
+      window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
       // Try to kickstart voice loading, some browsers need this.
-      window.speechSynthesis.getVoices();
+      loadVoices(); // Call it once to start the process or retry mechanism
     }
 
     return () => {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+        window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
         window.speechSynthesis.cancel(); 
+        if(voiceRetryTimeout) clearTimeout(voiceRetryTimeout);
       }
     };
   }, [toast]);
@@ -235,7 +240,7 @@ export default function VocabularyPracticePage() {
   };
 
   const useHint = () => {
-    if (!currentWord) return;
+    if (!currentWord || !isSpeakingAllowed) return;
     if (studentData.hintsRemaining <= session.hintsUsedThisSession) {
       toast({
         title: "No Hints Available",
@@ -256,7 +261,7 @@ export default function VocabularyPracticePage() {
             className="h-6 w-6 ml-1" 
             onClick={(e) => { e.stopPropagation(); speakWord(currentWord.english); }}
             aria-label="Play audio for hinted word"
-            disabled={!voicesLoaded}
+            disabled={!isSpeakingAllowed}
           >
             <Volume2 className="h-4 w-4" />
           </Button>
@@ -303,7 +308,9 @@ export default function VocabularyPracticePage() {
               <Eye className="inline-block mr-2 h-6 w-6 align-text-bottom" />
               Обзор слов: {vocabRound.title}
             </CardTitle>
-            <CardDescription className="text-center">{unit.title} - {vocabRound.words.length} слов. Просмотрите слова перед практикой.</CardDescription>
+            <CardDescription className="text-center">{unit.title} - {vocabRound.words.length} слов. Просмотрите слова перед практикой.
+            {!isSpeakingAllowed && <span className="block text-orange-500 text-xs mt-1">Озвучка слов загружается или недоступна.</span>}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-72">
@@ -313,7 +320,7 @@ export default function VocabularyPracticePage() {
                     <p className="text-lg font-semibold text-primary">{word.russian}</p>
                     <div className="flex items-center">
                         <p className="text-md text-foreground mr-2">Английский: {word.english}</p>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!voicesLoaded}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!isSpeakingAllowed}>
                             <Volume2 className="h-4 w-4" />
                         </Button>
                     </div>
@@ -324,8 +331,8 @@ export default function VocabularyPracticePage() {
             </ScrollArea>
           </CardContent>
           <CardFooter className="flex justify-center">
-            <Button onClick={startPractice} size="lg" disabled={!voicesLoaded}>
-              <Play className="mr-2 h-5 w-5" /> {voicesLoaded ? "Начать практику" : "Загрузка аудио..."}
+            <Button onClick={startPractice} size="lg" disabled={!isSpeakingAllowed}>
+              <Play className="mr-2 h-5 w-5" /> {isSpeakingAllowed ? "Начать практику" : "Загрузка аудио..."}
             </Button>
           </CardFooter>
         </Card>
@@ -362,7 +369,7 @@ export default function VocabularyPracticePage() {
                             {!isCorrect && <span className="text-xs text-red-700 dark:text-red-400"> (Correct: {word.english})</span>}
                         </div>
                         <div className="flex items-center flex-shrink-0">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!voicesLoaded}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => speakWord(word.english)} aria-label={`Play audio for ${word.english}`} disabled={!isSpeakingAllowed}>
                                 <Volume2 className="h-4 w-4" />
                             </Button>
                             {isCorrect ? <CheckCircle className="text-green-500 h-5 w-5" /> : <XCircle className="text-red-500 h-5 w-5" />}
@@ -398,7 +405,9 @@ export default function VocabularyPracticePage() {
       <Card className="w-full max-w-2xl mx-auto shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-headline text-center">{unit.title} - Vocabulary: {vocabRound.title}</CardTitle>
-          <CardDescription className="text-center">Translate the Russian word into English.</CardDescription>
+          <CardDescription className="text-center">Translate the Russian word into English.
+            {!isSpeakingAllowed && <span className="block text-orange-500 text-xs mt-1">Озвучка слов загружается или недоступна.</span>}
+          </CardDescription>
            <Progress value={progressPercentage} className="w-full h-2 mt-2" />
            <p className="text-xs text-muted-foreground text-center mt-1">Word {session.currentQuestionIndex + 1} of {words.length}</p>
         </CardHeader>
@@ -419,7 +428,7 @@ export default function VocabularyPracticePage() {
               {feedback === 'correct' && currentWord && (
                 <div className="flex items-center justify-center text-green-500 mt-3 font-semibold">
                     <p>Correct!</p>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!voicesLoaded}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!isSpeakingAllowed}>
                         <Volume2 className="h-4 w-4" />
                     </Button>
                 </div>
@@ -429,7 +438,7 @@ export default function VocabularyPracticePage() {
                     <p>Incorrect.</p>
                     <div className="flex items-center">
                         <p className="mr-1">Correct: {currentWord.english}</p>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!voicesLoaded}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => speakWord(currentWord.english)} aria-label={`Play audio for ${currentWord.english}`} disabled={!isSpeakingAllowed}>
                             <Volume2 className="h-4 w-4" />
                         </Button>
                     </div>
@@ -445,7 +454,7 @@ export default function VocabularyPracticePage() {
             onClick={useHint} 
             variant="outline" 
             size="sm"
-            disabled={!!feedback || !currentWord || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5 || !voicesLoaded}
+            disabled={!!feedback || !currentWord || studentData.hintsRemaining <= session.hintsUsedThisSession || session.hintsUsedThisSession >= 5 || !isSpeakingAllowed}
             aria-label={`Use hint, ${Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left`}
           >
             <Lightbulb className="mr-2 h-4 w-4" /> Hint ({Math.max(0, studentData.hintsRemaining - session.hintsUsedThisSession)} left)
