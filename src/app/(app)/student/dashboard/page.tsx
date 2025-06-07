@@ -86,7 +86,7 @@ export default function StudentDashboardPage() {
     }, 2000); // Check every 2 seconds
 
     return () => {
-      console.log('[Student Dashboard Interval Cleanup] Clearing interval for student:', studentData.id);
+      console.log('[Student Dashboard Interval Cleanup] Clearing interval for student:', studentData?.id);
       clearInterval(interval);
     };
   }, [studentData]);
@@ -140,7 +140,7 @@ export default function StudentDashboardPage() {
     }
     console.log('[MANUAL LOG] Current studentData.id:', studentData.id);
     const currentGlobalMockTests = JSON.parse(JSON.stringify(mockUnitTests)) as UnitTest[];
-    console.log('[MANUAL LOG] Global mockUnitTests (snapshot):', currentGlobalMockTests.map(t => ({id: t.id, status: t.status, title: t.title})));
+    console.log('[MANUAL LOG] Global mockUnitTests (snapshot):', currentGlobalMockTests.map(t => ({id: t.id, status: t.status, title: t.title, forStudentId: t.forStudentId })));
     
     const relevantTestsFromGlobal = currentGlobalMockTests.filter(test =>
       (test.status === 'waiting_room_open' || test.status === 'active') &&
