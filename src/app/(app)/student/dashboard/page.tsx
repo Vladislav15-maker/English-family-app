@@ -40,7 +40,6 @@ export default function StudentDashboardPage() {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
 
-      // Initial check for relevant tests
       const relevantTest = mockUnitTests.find(test => 
         (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
@@ -50,34 +49,36 @@ export default function StudentDashboardPage() {
     }
     if (user) {
       const messages = getMockMessages(user.id, user.role);
-      setUnreadMessagesCount(messages.filter(msg => !msg.isRead && msg.recipientId === user.id).length);
+      const currentUnread = messages.filter(msg => !msg.isRead && (msg.recipientId === user.id || (msg.recipientId === 'all_students' && user.role === 'student'))).length;
+      setUnreadMessagesCount(currentUnread);
     }
-  }, [studentData, user]);
+  }, [studentData, user]); // Removed mockMessages from dependency array to avoid loops if mockMessages changes elsewhere
 
-  // Simulates mockUnitTests being updated by teacher actions by periodically checking mockUnitTests
    useEffect(() => {
     const interval = setInterval(() => {
       if (studentData) {
-        // Directly find the relevant test from the current mockUnitTests
+        console.log("[Student Dashboard Interval Check] Checking for active tests...");
         const relevantTest = mockUnitTests.find(test => 
           (test.status === 'waiting_room_open' || test.status === 'active') &&
           (!test.forStudentId || test.forStudentId === studentData.id)
         );
-        // Update the state if the found test (or its status) is different from the current notification
-        // This simplified logic ensures re-render if the relevant test instance or its status changes.
+        if(relevantTest){
+            console.log("[Student Dashboard Interval Check] Relevant test found:", relevantTest);
+        } else {
+            console.log("[Student Dashboard Interval Check] No relevant test found with status waiting_room_open or active.");
+        }
         setActiveTestNotification(relevantTest || null);
       }
-    }, 2000); // Check for test status changes every 2 seconds
+    }, 2000); 
 
     return () => clearInterval(interval);
-  }, [studentData]); // Depend on studentData to re-init interval if student logs in/out
+  }, [studentData]);
 
 
   const simulateTeacherOpensWaitingRoom = () => {
     const pendingTestIndex = mockUnitTests.findIndex(test => test.status === 'pending' && (!test.forStudentId || test.forStudentId === studentData?.id));
     if (pendingTestIndex !== -1) {
       mockUnitTests[pendingTestIndex].status = 'waiting_room_open';
-      // setActiveTestNotification(mockUnitTests[pendingTestIndex]); // This will be picked up by the interval
       toast({ title: "Waiting Room Open (Simulated)!", description: `Test "${mockUnitTests[pendingTestIndex].title}" is now open for joining.`});
     } else {
       toast({ title: "No Pending Test", description: "No suitable pending test found for simulation.", variant: "default" });
@@ -89,19 +90,16 @@ export default function StudentDashboardPage() {
      if (waitingTestIndex !== -1) {
         mockUnitTests[waitingTestIndex].status = 'active';
         mockUnitTests[waitingTestIndex].startTime = new Date();
-        // setActiveTestNotification(mockUnitTests[waitingTestIndex]); // This will be picked up by the interval
         toast({ title: "Test Active (Simulated)!", description: `Test "${mockUnitTests[waitingTestIndex].title}" is now active.`});
      } else {
         const activeTest = mockUnitTests.find(test => test.status === 'active' && (!test.forStudentId || test.forStudentId === studentData?.id));
         if(activeTest) {
-            // setActiveTestNotification(activeTest); // This will be picked up by the interval
             toast({ title: "Test Already Active", description: `Test "${activeTest.title}" is active.`});
         } else {
             toast({ title: "No Test in Waiting Room", description: "No test is currently in 'waiting_room_open' state for simulation.", variant: "default" });
         }
      }
   };
-
 
   if (!studentData) {
     return <div className="text-center p-8">Loading student data...</div>;
@@ -126,12 +124,10 @@ export default function StudentDashboardPage() {
       buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
       icon = <Hourglass className="h-5 w-5 text-primary animate-pulse" />;
     } else if (activeTestNotification.status === 'active') {
-      // Student might join an already active test if they missed the waiting room or reloaded page.
-      // In a real scenario, they might be directed straight to the test or to a "test in progress" screen.
       title = "Test In Progress!";
       description = `The test "${activeTestNotification.title}" is currently active.`;
       buttonText = "Go to Test (Interface Coming Soon)"; 
-      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); // Or a dedicated /take page
+      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); // Should eventually go to test taking page
       icon = <PlayCircle className="h-5 w-5 text-green-500" />;
     } else {
         return null; 
@@ -215,7 +211,7 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
              <p className="text-2xl font-semibold text-secondary-foreground">{unreadMessagesCount}</p>
-             <Link href="/messages"><Button variant="link" className="p-0 h-auto">View Messages</Button></Link>
+             <Link href="/messages"><Button variant="link" className="p-0 h-auto">{unreadMessagesCount > 0 ? `View ${unreadMessagesCount} new messages` : "View Messages"}</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -271,6 +267,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
 
     
