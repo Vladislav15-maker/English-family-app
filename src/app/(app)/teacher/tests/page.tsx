@@ -11,9 +11,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Eye, ListChecks, Users, Hourglass, SquarePlay, PowerOff } from 'lucide-react'; // Replaced Square with SquarePlay for Start, PowerOff for End
+import { PlusCircle, Edit, Trash2, Eye, ListChecks, Users, Hourglass, SquarePlay, PowerOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +24,36 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { format } from 'date-fns';
+
+// Sub-component for the Delete Test Dialog
+function DeleteTestDialog({ test, onDelete }: { test: UnitTest; onDelete: (testId: string) => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon" title="Delete Test" disabled={test.status === 'active'}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the test
+            "{test.title}".
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => onDelete(test.id)} className="bg-destructive hover:bg-destructive/90">
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 
 export default function TeacherTestsPage() {
   const { teacherData } = useAuth();
@@ -34,19 +63,28 @@ export default function TeacherTestsPage() {
 
   useEffect(() => {
     setTests([...mockUnitTests]); 
+    console.log('[TeacherTestsPage] Initializing tests state:', JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, status: t.status, title:t.title})))));
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Create a shallow copy to help React detect changes if test statuses are updated externally
       const currentMockSnapshot = [...mockUnitTests];
+      
+      // More robust check: compare lengths or stringified versions if complex objects change
       if (tests.length !== currentMockSnapshot.length || 
           !tests.every((t, i) => t.id === currentMockSnapshot[i]?.id && t.status === currentMockSnapshot[i]?.status)
       ) {
+        // console.log('[TeacherTestsPage] Interval: Detected change in mockUnitTests. Updating local state.');
         setTests(currentMockSnapshot);
       }
-    }, 1000); 
-    return () => clearInterval(interval);
-  }, [tests]); 
+    }, 1000); // Check every second
+    return () => {
+        // console.log('[TeacherTestsPage] Clearing tests polling interval.');
+        clearInterval(interval);
+    }
+  }, [tests]); // Re-run effect if local 'tests' state changes (e.g., after deletion)
+
 
   if (!teacherData) {
     return <div className="text-center p-8">Loading teacher data...</div>;
@@ -97,7 +135,7 @@ export default function TeacherTestsPage() {
       case 'pending': return 'outline';
       case 'waiting_room_open': return 'default'; 
       case 'active': return 'secondary'; 
-      case 'completed': return 'destructive';
+      case 'completed': return 'destructive'; // Or perhaps a less "error-like" variant like 'success' if you add one
       default: return 'outline';
     }
   };
@@ -165,7 +203,7 @@ export default function TeacherTestsPage() {
                               <Button variant="default" size="sm" onClick={() => router.push(`/teacher/tests/${test.id}/waiting`)} title="Go to Waiting Room">
                                   <Users className="h-4 w-4 mr-1" /> Go to Waiting
                               </Button>
-                              <Button variant="outline" color="destructive" size="sm" onClick={() => handleEndTest(test.id)} title="End Test & Close Waiting Room">
+                              <Button variant="outline" size="sm" onClick={() => handleEndTest(test.id)} title="End Test & Close Waiting Room" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive">
                                   <PowerOff className="h-4 w-4 mr-1" /> End Test
                               </Button>
                             </>
@@ -181,28 +219,7 @@ export default function TeacherTestsPage() {
                           <Button variant="ghost" size="icon" onClick={() => router.push(`/teacher/tests/${test.id}/edit`)} title="Edit Test (Coming Soon for pending tests)" disabled={test.status !== 'pending'}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" title="Delete Test" disabled={test.status === 'active'}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the test
-                                    "{test.title}". This action is disabled for 'active' tests.
-                                </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => confirmDeleteTest(test.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-
+                          <DeleteTestDialog test={test} onDelete={confirmDeleteTest} />
                         </TableCell>
                       </TableRow>
                     );
@@ -216,5 +233,4 @@ export default function TeacherTestsPage() {
     </>
   );
 }
-
 
