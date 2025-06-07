@@ -1,41 +1,35 @@
-
 "use client";
 
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, BarChartHorizontalBig } from 'lucide-react';
-import { mockUnitTests } from '@/lib/mock-data';
+import { ArrowLeft, Info } from 'lucide-react';
 
 export default function TestResultsPage() {
   const router = useRouter();
-  const params = useParams();
-  const testId = params.testId as string;
-  const test = mockUnitTests.find(t => t.id === testId);
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
       <Button variant="outline" onClick={() => router.push('/teacher/tests')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Test List
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Test Info
       </Button>
 
       <Card className="shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-headline flex items-center">
-            <BarChartHorizontalBig className="mr-3 h-7 w-7 text-primary" /> Test Results: {test?.title || "Test Not Found"}
+            <Info className="mr-3 h-7 w-7 text-primary" /> Test Results Page Disabled
           </CardTitle>
           <CardDescription>
-            This page will display student submissions and results for this test. This functionality is currently under construction.
+            This page is no longer used. Student test scores are viewed and managed on their individual progress pages.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {test ? (
             <p className="text-muted-foreground">
-              Viewing results for "{test.title}" will be available soon.
+              To view or enter scores, please navigate to the specific student and unit.
             </p>
-          ) : (
-            <p className="text-destructive">The selected test could not be found.</p>
-          )}
+            <Button onClick={() => router.push('/teacher/students')} className="mt-4">
+                Go to Student List
+            </Button>
         </CardContent>
       </Card>
     </div>

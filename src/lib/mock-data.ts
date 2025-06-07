@@ -15,6 +15,8 @@ export const mockUsers: (Student | Teacher)[] = [
 export const mockStudents: Student[] = mockUsers.filter(u => u.role === 'student') as Student[];
 export const mockTeacher: Teacher = mockUsers.find(u => u.role === 'teacher') as Teacher;
 
+const STUDENT_PROGRESS_KEY = 'englishFamilyStudentProgress';
+const MESSAGES_KEY = 'englishFamilyMessages';
 
 const createInitialRoundProgress = (roundId: string, totalQuestions: number): StudentRoundProgress => ({
   roundId,
@@ -48,25 +50,113 @@ const createInitialUnitProgress = (unitId: string): StudentUnitProgress => {
   };
 };
 
-export let mockUnitTests: UnitTest[] = []; // Initialize as empty for teacher-created tests
-
-// Initialize progress for all students to 0%
-export const mockStudentProgress: AllStudentsProgress = {};
-mockStudents.forEach(student => {
-  mockStudentProgress[student.id] = {};
-  courseUnits.forEach(unit => {
-    mockStudentProgress[student.id][unit.id] = createInitialUnitProgress(unit.id);
+// Initialize progress for all students
+const initializeStudentProgress = (): AllStudentsProgress => {
+  const progress: AllStudentsProgress = {};
+  mockStudents.forEach(student => {
+    progress[student.id] = {};
+    courseUnits.forEach(unit => {
+      progress[student.id][unit.id] = createInitialUnitProgress(unit.id);
+    });
   });
-});
+  return progress;
+};
+
+// Load student progress from localStorage or initialize if not present
+export let mockStudentProgress: AllStudentsProgress;
+if (typeof window !== 'undefined') {
+  const storedProgress = localStorage.getItem(STUDENT_PROGRESS_KEY);
+  if (storedProgress) {
+    try {
+      mockStudentProgress = JSON.parse(storedProgress);
+      // Basic validation: check if all students and units are present, reinitialize if structure seems off
+      let needsReinit = false;
+      if (Object.keys(mockStudentProgress).length !== mockStudents.length) needsReinit = true;
+      mockStudents.forEach(student => {
+        if (!mockStudentProgress[student.id]) needsReinit = true;
+        else {
+          courseUnits.forEach(unit => {
+            if (!mockStudentProgress[student.id][unit.id]) needsReinit = true;
+          });
+        }
+      });
+      if(needsReinit) {
+        console.warn("Student progress structure in localStorage is outdated or incomplete. Reinitializing.");
+        mockStudentProgress = initializeStudentProgress();
+        localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(mockStudentProgress));
+      }
+    } catch (e) {
+      console.error("Failed to parse student progress from localStorage, reinitializing.", e);
+      mockStudentProgress = initializeStudentProgress();
+      localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(mockStudentProgress));
+    }
+  } else {
+    mockStudentProgress = initializeStudentProgress();
+    localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(mockStudentProgress));
+  }
+} else {
+  // Fallback for server-side or environments without window (should ideally not happen for this logic)
+  mockStudentProgress = initializeStudentProgress();
+}
 
 
-export let mockMessages: Message[] = []; 
+export const saveStudentProgress = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(mockStudentProgress));
+  }
+};
+
+// Load messages from localStorage or initialize as empty array
+export let mockMessages: Message[];
+if (typeof window !== 'undefined') {
+  const storedMessages = localStorage.getItem(MESSAGES_KEY);
+  if (storedMessages) {
+    try {
+      mockMessages = JSON.parse(storedMessages).map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp) // Ensure timestamp is a Date object
+      }));
+    } catch (e) {
+      console.error("Failed to parse messages from localStorage, initializing as empty.", e);
+      mockMessages = [];
+      localStorage.setItem(MESSAGES_KEY, JSON.stringify(mockMessages));
+    }
+  } else {
+    mockMessages = [];
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(mockMessages));
+  }
+} else {
+  mockMessages = [];
+}
+
+export const saveMessages = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(mockMessages));
+  }
+};
+
 
 export const getMockMessages = (userId: string, userRole: 'student' | 'teacher'): Message[] => {
-  if (userRole === 'teacher') {
-    return mockMessages.filter(msg => msg.recipientId === userId || (msg.senderId === userId && msg.recipientId === 'all_students') || msg.senderId === userId);
+  // Ensure mockMessages is loaded correctly before filtering
+  let currentMessages: Message[] = [];
+  if (typeof window !== 'undefined') {
+    const storedMessages = localStorage.getItem(MESSAGES_KEY);
+    if (storedMessages) {
+      try {
+        currentMessages = JSON.parse(storedMessages).map((msg: any) => ({
+         ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      } catch { /* ignore */ }
+    }
+  } else {
+    currentMessages = [...mockMessages]; // Use in-memory if no window
   }
-  return mockMessages.filter(msg => msg.recipientId === userId || msg.senderId === userId || msg.recipientId === 'all_students');
+
+  if (userRole === 'teacher') {
+    return currentMessages.filter(msg => msg.recipientId === userId || (msg.senderId === userId && msg.recipientId === 'all_students') || msg.senderId === userId);
+  }
+  return currentMessages.filter(msg => msg.recipientId === userId || msg.senderId === userId || msg.recipientId === 'all_students');
 };
 
 
@@ -76,5 +166,9 @@ export const mockStudentAttendance: StudentAttendance[] = mockStudents.map(stude
   attendance: {} 
 }));
 
-// To store students in a waiting room for a specific test
+// Unit tests are now offline. This array might be used by students to see their scores for "conceptual" tests.
+// For teacher management, it's not used for online execution anymore.
+export let mockUnitTests: UnitTest[] = []; 
+
+// To store students in a waiting room for a specific test (No longer primary mechanism)
 export let mockWaitingRoomParticipants: Record<string, { studentId: string; studentName: string; avatarFallback: string }[]> = {};

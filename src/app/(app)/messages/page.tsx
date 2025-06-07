@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { mockMessages, mockStudents, mockTeacher, getMockMessages } from '@/lib/mock-data';
+import { mockMessages, mockStudents, mockTeacher, getMockMessages, saveMessages } from '@/lib/mock-data';
 import type { Message } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,22 +19,23 @@ export default function MessagesPage() {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [selectedRecipient, setSelectedRecipient] = useState<string>(''); // studentId or 'teacher' or 'all_students'
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null); // Used to filter displayed messages
+  const [selectedRecipient, setSelectedRecipient] = useState<string>(''); 
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null); 
 
   useEffect(() => {
     if (user) {
-      setMessages(getMockMessages(user.id, user.role).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
-      // Auto-select first conversation partner or teacher for students
+      const userMessages = getMockMessages(user.id, user.role);
+      setMessages(userMessages.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+      
       if (user.role === 'student') {
-        const teacherMessages = messages.filter(m => m.senderId === mockTeacher.id || m.recipientId === mockTeacher.id);
-        if(teacherMessages.length > 0) {
+        const teacherMessages = userMessages.filter(m => m.senderId === mockTeacher.id || m.recipientId === mockTeacher.id);
+        if(teacherMessages.length > 0 && !activeConversationId) { // Only auto-select if no conversation is active
             setActiveConversationId(mockTeacher.id);
-            setSelectedRecipient(mockTeacher.id); // Default to teacher for students
+            setSelectedRecipient(mockTeacher.id); 
         }
       }
     }
-  }, [user]); // messages dependency removed to avoid loop on setMessages
+  }, [user, activeConversationId]); // Re-run if user changes, or to potentially refresh if activeConversationId was reset
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -44,8 +45,11 @@ export default function MessagesPage() {
   
   const getConversationPartners = () => {
     if (!user) return [];
+    // Fetch fresh messages for partners list, as messages state might not include all for this calc
+    const allUserMessages = getMockMessages(user.id, user.role);
     const partners = new Map<string, { id: string, name: string, type: 'student' | 'teacher' | 'group'}>();
-    messages.forEach(msg => {
+    
+    allUserMessages.forEach(msg => {
       if (msg.senderId !== user.id && msg.senderId !== 'all_students') {
         partners.set(msg.senderId, {id: msg.senderId, name: msg.senderName, type: msg.senderId.startsWith('teacher-') ? 'teacher' : 'student'});
       }
@@ -78,9 +82,12 @@ export default function MessagesPage() {
       timestamp: new Date(),
       isRead: false,
     };
-    // In a real app, this would be sent to a backend
-    setMessages(prev => [...prev, newMsg]); 
-    mockMessages.push(newMsg); // Add to global mock for persistence in session
+    
+    mockMessages.push(newMsg); 
+    saveMessages(); // Save all messages to localStorage
+    
+    // Update local state to show the new message immediately
+    setMessages(prev => [...prev, newMsg].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())); 
     setNewMessage('');
     toast({title: "Message Sent!", description: "Your message has been sent successfully."});
   };
@@ -89,13 +96,13 @@ export default function MessagesPage() {
     ? messages.filter(msg => 
         (msg.senderId === user?.id && msg.recipientId === activeConversationId) ||
         (msg.senderId === activeConversationId && msg.recipientId === user?.id) ||
-        (msg.recipientId === 'all_students' && user?.role === 'student') // Show group messages to students
+        (activeConversationId === 'all_students' && msg.recipientId === 'all_students' && user?.role === 'teacher') || // Teacher sending to all
+        (msg.recipientId === 'all_students' && user?.role === 'student') // Student receiving from all
       )
     : [];
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 h-[calc(100vh-var(--header-height,4rem)-2rem)] flex flex-col md:flex-row gap-4">
-      {/* Contacts/Conversations List */}
       <Card className="w-full md:w-1/3 lg:w-1/4 shadow-xl flex flex-col">
         <CardHeader>
           <CardTitle className="font-headline">Conversations</CardTitle>
@@ -128,7 +135,6 @@ export default function MessagesPage() {
         </ScrollArea>
       </Card>
 
-      {/* Message Display and Input Area */}
       <Card className="w-full md:w-2/3 lg:w-3/4 shadow-xl flex flex-col">
         <CardHeader>
           <CardTitle className="font-headline">
@@ -148,10 +154,15 @@ export default function MessagesPage() {
                   msg.senderId === user?.id ? "justify-end" : "justify-start"
                 )}
               >
-                {msg.senderId !== user?.id && (
+                {msg.senderId !== user?.id && msg.senderId !== 'all_students' && (
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">{getInitials(msg.senderName)}</AvatarFallback>
                   </Avatar>
+                )}
+                 {msg.senderId === 'all_students' && ( // Icon for announcements
+                    <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-accent text-accent-foreground text-xs"><Users size={16}/></AvatarFallback>
+                    </Avatar>
                 )}
                 <div
                   className={cn(

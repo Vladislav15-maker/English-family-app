@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
@@ -26,9 +25,9 @@ const navItems: NavItem[] = [
   { href: '/teacher/students', label: 'Students', icon: Users, roles: ['teacher'] },
   { href: '/teacher/units', label: 'Course Units', icon: BookOpen, roles: ['teacher'] },
   { href: '/teacher/attendance', label: 'Attendance', icon: CalendarDays, roles: ['teacher'] },
-  { href: '/teacher/tests', label: 'Tests', icon: GraduationCap, roles: ['teacher'] }, 
+  // { href: '/teacher/tests', label: 'Tests', icon: GraduationCap, roles: ['teacher'] }, // Removed as tests are offline
   { href: '/student/class', label: 'My Class', icon: Users, roles: ['student'] }, 
-  { href: '/student/tests', label: 'My Tests', icon: GraduationCap, roles: ['student'] }, 
+  { href: '/student/tests', label: 'My Test Scores', icon: GraduationCap, roles: ['student'] }, // Renamed for students
   { href: '/messages', label: 'Messages', icon: MessageSquare, roles: ['student', 'teacher'] },
   { href: '/statistics', label: 'Statistics', icon: BarChart3, roles: ['student', 'teacher'] }, 
 ];

@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, BookOpen, Type, PlayCircle, Check, Percent } from 'lucide-react';
+import { ArrowLeft, BookOpen, Type, PlayCircle, Check, Percent, Award } from 'lucide-react';
 import { getStudentProgressForUnit, getStudentRoundProgress } from '@/lib/progress-utils';
 import type { VocabRound, GrammarRound } from '@/types';
 
@@ -59,6 +59,7 @@ export default function StudentUnitDetailPage() {
   };
   
   const overallProgress = unitProgress?.overallCompletion.toFixed(0) ?? 0;
+  const unitTestScore = unitProgress?.unitTest?.score;
 
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
@@ -81,15 +82,21 @@ export default function StudentUnitDetailPage() {
           <div className="md:w-2/3 p-6">
             <h1 className="text-4xl font-headline mb-2 text-foreground">{unit.title}</h1>
             <p className="text-xl text-muted-foreground mb-4">{unit.description}</p>
-            <div className="flex items-center gap-2 text-primary mb-4">
+            <div className="flex items-center gap-2 text-primary mb-1">
               <Percent className="h-6 w-6" />
-              <span className="text-2xl font-semibold">{overallProgress}% Overall Completion</span>
+              <span className="text-2xl font-semibold">{overallProgress}% Overall Homework Completion</span>
             </div>
+             {typeof unitTestScore === 'number' && (
+              <div className="flex items-center gap-2 text-accent mb-4">
+                <Award className="h-6 w-6" />
+                <span className="text-xl font-semibold">Unit Test Score: {unitTestScore.toFixed(0)}%</span>
+              </div>
+            )}
             <div className="w-full bg-muted rounded-full h-4 mb-4">
               <div className="bg-primary h-4 rounded-full transition-all duration-500" style={{ width: `${overallProgress}%` }}></div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Complete all vocabulary and grammar rounds to master this unit. Good luck!
+              Complete all vocabulary and grammar rounds to master this unit. Unit test score is provided by your teacher.
             </p>
           </div>
         </div>
@@ -114,9 +121,21 @@ export default function StudentUnitDetailPage() {
       </section>
       
       <div className="mt-12 text-center">
-         <Button size="lg" onClick={() => alert('Unit Test feature coming soon!')}>
-            Start Unit Test (if available)
-         </Button>
+         <Card className="inline-block shadow-md">
+            <CardHeader>
+                <CardTitle className="font-headline text-xl">Unit Test (Offline)</CardTitle>
+            </CardHeader>
+            <CardContent>
+                {typeof unitTestScore === 'number' ? (
+                    <p className="text-3xl font-bold text-primary">{unitTestScore.toFixed(0)}%</p>
+                ) : (
+                    <p className="text-muted-foreground">Score not yet available.</p>
+                )}
+            </CardContent>
+            <CardFooter>
+                <p className="text-xs text-muted-foreground">This test is conducted offline by your teacher.</p>
+            </CardFooter>
+         </Card>
       </div>
     </div>
   );
