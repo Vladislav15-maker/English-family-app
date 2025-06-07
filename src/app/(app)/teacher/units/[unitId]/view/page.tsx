@@ -4,9 +4,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { getUnitById } from '@/lib/course-data';
 import type { Unit, VocabRound, GrammarRound, Word as WordType, GrammarQuestion } from '@/types';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, BookOpenText, Type, Edit, CheckSquare, List } from 'lucide-react'; // Added Edit
+import { ArrowLeft, BookOpenText, Type, Edit, CheckSquare, List } from 'lucide-react'; 
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -99,7 +99,7 @@ export default function TeacherViewUnitPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-2xl flex items-center">
-              <Type className="mr-3 h-7 w-7 text-secondary-foreground" /> {/* Updated icon color for grammar */}
+              <Type className="mr-3 h-7 w-7 text-secondary-foreground" /> 
               Grammar Rounds ({unit.grammar.length})
             </CardTitle>
           </CardHeader>
@@ -149,4 +149,5 @@ export default function TeacherViewUnitPage() {
     </div>
   );
 }
+
 
