@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Ensure CardFooter is here
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { courseUnits } from '@/lib/course-data';
@@ -10,25 +10,25 @@ import Image from 'next/image';
 import { Lock, CheckCircle, PlayCircle, BarChartHorizontalBig, MessageCircle, AlertTriangle, Info, GraduationCap, Hourglass } from 'lucide-react';
 import { getStudentProgressForUnit, getOverallStudentProgress, StudentProgressSummary } from '@/lib/progress-utils';
 import { useEffect, useState } from 'react';
-import { mockUnitTests, getMockMessages, mockStudents } from '@/lib/mock-data'; 
+import { mockUnitTests, getMockMessages, mockStudents } from '@/lib/mock-data';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
 const isUnitActuallyLocked = (unit: Unit): boolean => {
-  if (!unit.unlockDate) return unit.isLocked; 
+  if (!unit.unlockDate) return unit.isLocked;
   const today = new Date();
-  today.setHours(0,0,0,0); 
-  
+  today.setHours(0,0,0,0);
+
   const unitUnlockDateTime = new Date(unit.unlockDate);
-  unitUnlockDateTime.setHours(18,0,0,0); 
+  unitUnlockDateTime.setHours(18,0,0,0);
 
   return new Date() < unitUnlockDateTime;
 };
 
 
 export default function StudentDashboardPage() {
-  const { studentData, user } = useAuth(); 
+  const { studentData, user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [progressSummary, setProgressSummary] = useState<StudentProgressSummary | null>(null);
@@ -40,7 +40,7 @@ export default function StudentDashboardPage() {
       const summary = getOverallStudentProgress(studentData.id);
       setProgressSummary(summary);
     }
-  }, [studentData]); 
+  }, [studentData]);
 
   useEffect(() => {
     if (user) {
@@ -53,22 +53,22 @@ export default function StudentDashboardPage() {
   }, [user]);
 
    useEffect(() => {
-    if (!studentData) return; // Ensure studentData is loaded
+    if (!studentData) return;
 
     const interval = setInterval(() => {
-      // Log the current state of mockUnitTests as seen by this interval
-      console.log("[Student Dashboard Interval Check] Checking for active tests. mockUnitTests snapshot:", JSON.parse(JSON.stringify(mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status})))));
+      const currentMockSnapshot = mockUnitTests.map(t => ({id: t.id, title: t.title, status: t.status}));
+      console.log("[Student Dashboard Interval Check] Checking for active tests. mockUnitTests snapshot:", JSON.stringify(currentMockSnapshot));
 
-      const relevantTest = mockUnitTests.find(test => 
+      const relevantTest = mockUnitTests.find(test =>
         (test.status === 'waiting_room_open' || test.status === 'active') &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
-        (!test.forGroupId /* add group check if implemented */ ) 
+        (!test.forGroupId /* add group check if implemented */ )
       );
-      
+
       if (relevantTest) {
         console.log("[Student Dashboard Interval Check] Relevant test found:", {id: relevantTest.id, status: relevantTest.status, title: relevantTest.title});
+        // Create a new object to ensure React detects the change if relevantTest content changed
         setActiveTestNotification(prev => {
-            // Create a new object to ensure React detects the change if relevantTest content changed
             if(prev?.id !== relevantTest.id || prev?.status !== relevantTest.status){
                 return {...relevantTest};
             }
@@ -78,21 +78,21 @@ export default function StudentDashboardPage() {
         console.log("[Student Dashboard Interval Check] No relevant test found with status waiting_room_open or active.");
         setActiveTestNotification(null);
       }
-    }, 2000); 
+    }, 2000);
 
     return () => {
       console.log("[Student Dashboard] Clearing test check interval.");
       clearInterval(interval);
     };
-  }, [studentData]); // Rerun if studentData changes
+  }, [studentData]);
 
 
   const simulateTeacherOpensWaitingRoom = () => {
     if (!studentData) return;
-    const pendingTestIndex = mockUnitTests.findIndex(test => 
-        test.status === 'pending' && 
+    const pendingTestIndex = mockUnitTests.findIndex(test =>
+        test.status === 'pending' &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
-        (!test.forGroupId) 
+        (!test.forGroupId)
     );
 
     if (pendingTestIndex !== -1) {
@@ -103,11 +103,11 @@ export default function StudentDashboardPage() {
       toast({ title: "No Pending Test Found", description: "Could not find a 'pending' test to open for simulation.", variant: "default" });
     }
   };
-  
+
   const simulateTeacherStartsActiveTestFromWaitingRoom = () => {
      if (!studentData) return;
-     const waitingTestIndex = mockUnitTests.findIndex(test => 
-        test.status === 'waiting_room_open' && 
+     const waitingTestIndex = mockUnitTests.findIndex(test =>
+        test.status === 'waiting_room_open' &&
         (!test.forStudentId || test.forStudentId === studentData.id) &&
         (!test.forGroupId)
     );
@@ -126,11 +126,11 @@ export default function StudentDashboardPage() {
      }
   };
 
-  if (!studentData || !user) { 
+  if (!studentData || !user) {
     return <div className="text-center p-8">Loading student data...</div>;
   }
-  
-  const unlockedUnits = courseUnits.filter(unit => !isUnitActuallyLocked(unit)); 
+
+  const unlockedUnits = courseUnits.filter(unit => !isUnitActuallyLocked(unit));
   const lockedUnitsCount = courseUnits.length - unlockedUnits.length;
 
   const getNotificationAlert = () => {
@@ -151,27 +151,27 @@ export default function StudentDashboardPage() {
     } else if (activeTestNotification.status === 'active') {
       title = "Test In Progress!";
       description = `"${activeTestNotification.title}" is currently active.`;
-      buttonText = "Go to Test"; 
-      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`); 
+      buttonText = "Go to Test";
+      buttonAction = () => router.push(`/student/tests/${activeTestNotification.id}/waiting`);
       icon = <PlayCircle className="h-5 w-5 text-green-500" />;
     } else {
-        return null; 
+        return null;
     }
 
     return (
       <Alert className="mb-6 border-primary shadow-lg">
-        <div className="flex items-start gap-3"> {/* Changed to items-start for better alignment with multi-line text */}
+        <div className="flex items-start gap-3">
             {icon}
-            <div className="flex-1"> {/* Added flex-1 to allow text to take available space */}
+            <div className="flex-1">
                 <AlertTitle className="font-headline text-lg text-primary">{title}</AlertTitle>
                 <AlertDescription className="text-foreground text-sm">
                 {description}
                 </AlertDescription>
             </div>
         </div>
-        <Button 
-            onClick={buttonAction} 
-            className="mt-3 w-full sm:w-auto ml-auto block sm:ml-0 sm:inline-block" /* Positioning improvements */
+        <Button
+            onClick={buttonAction}
+            className="mt-3 w-full sm:w-auto ml-auto block sm:ml-0 sm:inline-block"
             size="sm"
         >
             {buttonText}
@@ -246,7 +246,7 @@ export default function StudentDashboardPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <h2 className="text-2xl font-headline mb-6 text-foreground">Your Units</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {unlockedUnits.map((unit) => {
@@ -269,20 +269,20 @@ export default function StudentDashboardPage() {
                 <CardTitle className="font-headline text-xl mb-1">{unit.title}</CardTitle>
                 <CardDescription className="text-muted-foreground mb-2 text-sm">{unit.description}</CardDescription>
                 <div className="w-full bg-muted rounded-full h-2.5 mb-2">
-                  <div 
-                    className="bg-primary h-2.5 rounded-full" 
+                  <div
+                    className="bg-primary h-2.5 rounded-full"
                     style={{ width: `${unitProgress?.overallCompletion.toFixed(0) ?? 0}%` }}
                   ></div>
                 </div>
                 <p className="text-xs text-muted-foreground text-right">{unitProgress?.overallCompletion.toFixed(0) ?? 0}% Complete</p>
               </CardContent>
-              <CardFooter className="pt-0">
+              {/* <CardFooter className="pt-0">
                  <Link href={`/student/units/${unit.id}`} passHref className="w-full">
                   <Button className="w-full" variant={isCompleted ? "secondary" : "default"}>
                     {isCompleted ? 'Review Unit' : 'Start Learning'}
                   </Button>
                 </Link>
-              </CardFooter>
+              </CardFooter> */}
             </Card>
           );
         })}
