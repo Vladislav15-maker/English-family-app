@@ -1,8 +1,9 @@
 export interface User {
   id: string;
-  username: string;
-  name: string;
-  role: 'student' | 'teacher';
+  username: string; // From profiles table
+  name: string;     // From profiles table
+  role: 'student' | 'teacher'; // From profiles table
+  email?: string; // From Supabase auth.users
   password?: string; // Only for mock data, not for client-side state
 }
 
@@ -50,7 +51,7 @@ export interface Unit {
   title: string; // e.g., "Unit 1"
   unitNumber: number;
   isLocked: boolean;
-  unlockDate?: Date; 
+  unlockDate?: Date;
   description: string; // e.g., "Greetings"
   imagePlaceholder?: string; // e.g., "greetings people" for data-ai-hint
   vocabulary: VocabRound[];
@@ -90,24 +91,24 @@ export type AllStudentsProgress = Record<string, Record<string, StudentUnitProgr
 
 export interface Message {
   id: string;
-  senderId: string; 
+  senderId: string;
   senderName: string;
-  recipientId: string; 
+  recipientId: string;
   content: string;
   timestamp: Date;
   isRead: boolean;
 }
 
-export type AttendanceStatus = 'present' | 'absent' | null; 
+export type AttendanceStatus = 'present' | 'absent' | null;
 
 export interface DailyAttendance {
-  date: string; 
+  date: string;
   status: AttendanceStatus;
 }
 export interface StudentAttendance {
   studentId: string;
-  name: string; 
-  attendance: Record<string, AttendanceStatus>; 
+  name: string;
+  attendance: Record<string, AttendanceStatus>;
 }
 
 
@@ -118,12 +119,12 @@ export interface UnitTest {
   teacherId: string;
   status: 'pending' | 'waiting_room_open' | 'active' | 'completed'; // 'completed' means teacher has marked it as finished/graded, not student submission
   durationMinutes: number;
-  questions: (Word | GrammarQuestion)[]; 
+  questions: (Word | GrammarQuestion)[];
   startTime?: Date; // Teacher starts the test for students
   endTime?: Date; // Teacher ends the test availability
   assignedDate?: Date; // When the test was created/scheduled
-  forStudentId?: string; 
-  forGroupId?: string; 
+  forStudentId?: string;
+  forGroupId?: string;
 }
 
 // StudentTestResult is essentially StudentRoundProgress but tied to a UnitTest.id
@@ -137,15 +138,29 @@ export interface PracticeSessionState {
 }
 
 export interface StudentData {
-  id: string; 
+  id: string;
   hintsRemaining: number;
-  progress: Record<string, StudentUnitProgress>; 
+  progress: Record<string, StudentUnitProgress>;
   messages: Message[];
   activeTestId?: string;
 }
 
 export interface TeacherData {
-  id: string; 
+  id: string;
   messages: Message[];
 }
 
+// Interface for sign-up data, including metadata for profile
+export interface SignUpCredentials {
+  email: string;
+  password?: string;
+  name: string;
+  username: string;
+  role: 'student' | 'teacher';
+}
+
+// Interface for login data
+export interface LoginCredentials {
+  email: string;
+  password?: string;
+}
