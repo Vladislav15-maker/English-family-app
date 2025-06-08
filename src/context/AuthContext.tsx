@@ -3,7 +3,7 @@
 import type { User, Student, Teacher, SignUpCredentials, LoginCredentials } from '@/types';
 import type { Profile } from '@/types/supabase';
 import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User as SupabaseUser, Subscription } from '@supabase/supabase-js'; // Added Subscription
 import { useRouter, usePathname } from 'next/navigation';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -28,22 +28,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
+    // console.log("[AuthContext] useEffect for onAuthStateChange triggered. Pathname:", pathname);
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
+        // console.log("[AuthContext] onAuthStateChange fired. Event:", event, "Session:", session);
         setIsLoading(true);
         const supabaseAuthUser = session?.user ?? null;
 
         if (supabaseAuthUser) {
+          // console.log("[AuthContext] Supabase user found:", supabaseAuthUser.id);
           const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', supabaseAuthUser.id)
             .single();
 
-          if (error && error.code !== 'PGRST116') { // PGRST116: "Searched for one object, but found 0 rows"
-            console.error('Error fetching profile:', error);
-            setUser(null); // Or handle more gracefully
+          if (error && error.code !== 'PGRST116') { 
+            console.error('[AuthContext] Error fetching profile:', error);
+            setUser(null);
           } else if (profile) {
+            // console.log("[AuthContext] Profile found:", profile);
             const appUser: User = {
               id: supabaseAuthUser.id,
               email: supabaseAuthUser.email,
@@ -54,7 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             setUser(appUser);
             
-            // Redirect after user is set
             if (pathname === '/login' || pathname === '/') {
                  if (appUser.role === 'teacher') {
                     router.replace('/teacher/dashboard');
@@ -62,36 +65,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     router.replace('/student/dashboard');
                 }
             }
-
           } else {
-             // Profile might not exist yet if user just signed up and trigger is running
-             // Or if email confirmation is pending.
-             // For now, set a minimal user or null. Consider a state for "profile pending".
-             console.warn("Profile not found for user:", supabaseAuthUser.id, "Event:", event);
-             // If it's a new SIGNED_IN event after sign up, profile might appear shortly.
-             // We might want to delay setting user to null or implement a retry.
-             // For now, if it's not a USER_DELETED event, keep previous user or set a basic one.
+             console.warn("[AuthContext] Profile not found for user:", supabaseAuthUser.id, "Event:", event);
              if (event !== 'USER_DELETED') {
-                // If it's a fresh login/signup, and profile is missing, this is an issue.
-                // The trigger should have created it.
-                // Let's assume for now the trigger works and the profile will be there.
-                // If after a short delay profile is still not there, then it's an issue.
+                // Potentially set a minimal user or wait.
              } else {
                 setUser(null);
              }
           }
-        } else { // No Supabase user
+        } else { 
+          // console.log("[AuthContext] No Supabase user in session.");
           setUser(null);
-          if (!['/login'].includes(pathname) && !pathname.startsWith('/_next/')) { // Avoid redirect loops or static assets
-            // router.replace('/login'); // Let AppLayout handle this
-          }
         }
         setIsLoading(false);
       }
     );
 
+    // Ensure authListener and its data.subscription exist before trying to unsubscribe
     return () => {
-      authListener?.unsubscribe();
+      if (authListener && authListener.subscription) {
+        authListener.subscription.unsubscribe();
+        // console.log("[AuthContext] Unsubscribed from onAuthStateChange.");
+      } else {
+        // console.warn("[AuthContext] Could not unsubscribe, authListener or subscription missing.");
+      }
     };
   }, [router, pathname]);
 
@@ -107,7 +104,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Login error:', error);
       return { success: false, error };
     }
-    // onAuthStateChange will handle success and profile fetching
     return { success: true };
   };
 
@@ -117,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: credentials.email,
       password: credentials.password!,
       options: {
-        data: { // This data is passed to raw_user_meta_data for the trigger
+        data: { 
           username: credentials.username,
           name: credentials.name,
           role: credentials.role,
@@ -130,13 +126,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { success: false, error };
     }
     if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
-        // This can happen if "Confirm email" is enabled in Supabase project settings
-        // and the user already exists but is not confirmed.
-        // Supabase signUp will then resend the confirmation email.
         return { success: true, error: { message: "User already exists. If unconfirmed, a new confirmation email has been sent." } };
     }
-    // onAuthStateChange will handle success and profile fetching
-    // Note: If email confirmation is enabled, user will be in session but profile creation might be delayed.
     return { success: true };
   };
 
@@ -144,8 +135,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     setIsLoading(true);
     await supabase.auth.signOut();
-    setUser(null); // Explicitly clear user state
-    router.push('/login'); // Force redirect to login
+    setUser(null); 
+    router.push('/login'); 
     setIsLoading(false);
   };
 
@@ -170,3 +161,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
