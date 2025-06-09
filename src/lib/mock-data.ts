@@ -1,3 +1,4 @@
+
 import type { User, Student, Teacher, Message, AllStudentsProgress, StudentUnitProgress, StudentRoundProgress, StudentAttendance, UnitTest } from '@/types';
 import { courseUnits } from './course-data';
 
@@ -54,68 +55,71 @@ const initializeAllStudentProgress = (): AllStudentsProgress => {
   return progress;
 };
 
-// Function to initialize progress and store it if not found or invalid
-const initializeAndStoreProgress = (): AllStudentsProgress => {
-  const progress = initializeAllStudentProgress();
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(progress));
-  }
-  return progress;
-};
-
 // In-memory cache of student progress. This gets updated by saveStudentProgress.
 let _cachedStudentProgress: AllStudentsProgress | null = null;
 
 // Function to get the student progress data.
-// It prioritizes reading from localStorage if on client-side to get the "freshest" data.
 export const getMockStudentProgress = (): AllStudentsProgress => {
   if (typeof window !== 'undefined') {
-    const storedProgress = localStorage.getItem(STUDENT_PROGRESS_KEY);
-    if (storedProgress) {
+    const storedProgressJson = localStorage.getItem(STUDENT_PROGRESS_KEY);
+    let loadedProgress: AllStudentsProgress | null = null;
+
+    if (storedProgressJson) {
       try {
-        _cachedStudentProgress = JSON.parse(storedProgress);
-        // Basic validation: check if all students and units are present, reinitialize if structure seems off
-        let needsReinit = false;
-        if (!_cachedStudentProgress || Object.keys(_cachedStudentProgress).length === 0) { // Check if empty or null
-             needsReinit = true;
-        } else {
-            mockStudents.forEach(student => {
-                if (!_cachedStudentProgress![student.id]) {
-                    needsReinit = true;
-                } else {
-                    courseUnits.forEach(unit => {
-                        if (!_cachedStudentProgress![student.id][unit.id]) {
-                            needsReinit = true;
-                        }
-                    });
-                }
-            });
-        }
-        if(needsReinit) {
-          console.warn("Student progress structure in localStorage is outdated, incomplete, or empty. Reinitializing.");
-          _cachedStudentProgress = initializeAndStoreProgress();
-        }
-        return _cachedStudentProgress!;
+        loadedProgress = JSON.parse(storedProgressJson);
       } catch (e) {
-        console.error("Failed to parse student progress from localStorage during get, reinitializing.", e);
-        _cachedStudentProgress = initializeAndStoreProgress();
-        return _cachedStudentProgress;
+        console.error("Failed to parse student progress from localStorage, will reinitialize.", e);
+        loadedProgress = null; // Treat as if not found, will initialize fresh
       }
-    } else {
-      // If nothing in storage, initialize, store, and return
-      _cachedStudentProgress = initializeAndStoreProgress();
+    }
+
+    // If no stored progress or parsing failed, initialize fresh for all students
+    if (!loadedProgress) {
+      console.log("No valid progress found in localStorage, initializing fresh for all students.");
+      _cachedStudentProgress = initializeAllStudentProgress();
+      localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(_cachedStudentProgress));
       return _cachedStudentProgress;
     }
+
+    // If we have loaded progress, ensure it's up-to-date with current students and units
+    // This will add entries for new students or new units for existing students without wiping old data.
+    let modified = false;
+    mockStudents.forEach(student => {
+      if (!loadedProgress![student.id]) {
+        loadedProgress![student.id] = {}; // Initialize progress object for a new student
+        modified = true;
+      }
+      courseUnits.forEach(unit => {
+        if (!loadedProgress![student.id][unit.id]) {
+          // If a student from mockStudents doesn't have this unit in loadedProgress, add it.
+          loadedProgress![student.id][unit.id] = createInitialUnitProgress(unit.id);
+          modified = true;
+        } else {
+          // Optional: Could also check if existing unit progress has all rounds, etc.
+          // For now, just ensuring the unit entry exists.
+        }
+      });
+    });
+
+    if (modified) {
+      console.log("Student progress structure updated with new students/units and saved to localStorage.");
+      localStorage.setItem(STUDENT_PROGRESS_KEY, JSON.stringify(loadedProgress));
+    }
+    
+    _cachedStudentProgress = loadedProgress;
+    return _cachedStudentProgress;
+
   }
+  
   // For non-browser (SSR) or if _cachedStudentProgress is somehow still null
   if (!_cachedStudentProgress) {
-      _cachedStudentProgress = initializeAllStudentProgress(); // Initialize for SSR or as a last resort
+      _cachedStudentProgress = initializeAllStudentProgress(); 
   }
   return _cachedStudentProgress;
 };
 
+
 // Function to save the student progress data.
-// It updates both the in-memory cache and localStorage.
 export const saveStudentProgress = (updatedProgress: AllStudentsProgress) => {
   _cachedStudentProgress = updatedProgress; // Update the in-memory cache
   if (typeof window !== 'undefined') {
@@ -188,3 +192,4 @@ export const mockStudentAttendance: StudentAttendance[] = mockStudents.map(stude
 export let mockUnitTests: UnitTest[] = []; 
 
 export let mockWaitingRoomParticipants: Record<string, { studentId: string; studentName: string; avatarFallback: string }[]> = {};
+
