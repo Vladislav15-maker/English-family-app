@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -10,39 +11,35 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/hooks/use-toast";
 import { Leaf, LogIn } from 'lucide-react';
 import type { LoginCredentials } from '@/types';
-// RadioGroup и UserPlus больше не нужны, так как регистрация убрана
-// import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 export default function LoginPage() {
-  // isSignUp и связанные с ним состояния удалены
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState(''); // Changed from email to username
   const [password, setPassword] = useState('');
   
-  const { login, isLoading } = useAuth(); // signUp удален из зависимостей
+  const { login, isLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Логика для SignUp удалена
-    if (!email || !password) {
+    if (!username || !password) {
       toast({
         title: "Login Failed",
-        description: "Please enter both email and password.",
+        description: "Please enter both username and password.", // Updated message
         variant: "destructive",
       });
       return;
     }
-    const credentials: LoginCredentials = { email, password };
+    const credentials: LoginCredentials = { username, password }; // Use username
     const { success, error } = await login(credentials);
     if (success) {
       // AuthProvider handles redirection
     } else {
       toast({
         title: "Login Failed",
-        description: error?.message || "Invalid email or password.",
+        description: error?.message || "Invalid username or password.", // Updated message
         variant: "destructive",
       });
     }
@@ -63,20 +60,18 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label> {/* Changed from Email to Username */}
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                id="username" // Changed from email
+                type="text" // Changed from email
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your_username" // Changed placeholder
                 required
                 className="text-base"
               />
             </div>
             
-            {/* Поля для SignUp (name, username, role) удалены */}
-
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -97,7 +92,6 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center text-sm text-muted-foreground">
-           {/* Кнопка для переключения на Sign Up удалена */}
           <p className="mt-2 text-center">
             Enter your credentials to continue.
           </p>

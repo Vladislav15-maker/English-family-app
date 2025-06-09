@@ -161,6 +161,6 @@ export interface SignUpCredentials {
 
 // Interface for login data
 export interface LoginCredentials {
-  email: string;
+  username: string; // Changed from email
   password?: string;
 }

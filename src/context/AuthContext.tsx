@@ -3,7 +3,7 @@
 import type { User, Student, Teacher, SignUpCredentials, LoginCredentials } from '@/types';
 import type { Profile } from '@/types/supabase';
 import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User as SupabaseUser, Subscription } from '@supabase/supabase-js'; // Added Subscription
+import type { AuthChangeEvent, Session, User as SupabaseUser, Subscription } from '@supabase/supabase-js';
 import { useRouter, usePathname } from 'next/navigation';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -28,15 +28,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
-    // console.log("[AuthContext] useEffect for onAuthStateChange triggered. Pathname:", pathname);
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
-        // console.log("[AuthContext] onAuthStateChange fired. Event:", event, "Session:", session);
         setIsLoading(true);
         const supabaseAuthUser = session?.user ?? null;
 
         if (supabaseAuthUser) {
-          // console.log("[AuthContext] Supabase user found:", supabaseAuthUser.id);
           const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
@@ -47,10 +44,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.error('[AuthContext] Error fetching profile:', error);
             setUser(null);
           } else if (profile) {
-            // console.log("[AuthContext] Profile found:", profile);
             const appUser: User = {
               id: supabaseAuthUser.id,
-              email: supabaseAuthUser.email,
+              email: supabaseAuthUser.email, // email still stored on user object from auth
               username: profile.username || '',
               name: profile.name || '',
               role: profile.role as 'student' | 'teacher',
@@ -66,28 +62,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
           } else {
-             console.warn("[AuthContext] Profile not found for user:", supabaseAuthUser.id, "Event:", event);
-             if (event !== 'USER_DELETED') {
-                // Potentially set a minimal user or wait.
+             // Profile might not exist yet if user just signed up and trigger hasn't run / finished
+             // Or if invited user hasn't set password and confirmed.
+             console.warn("[AuthContext] Profile not found for user (or not yet created):", supabaseAuthUser.id, "Event:", event);
+             if (event !== 'USER_DELETED' && event !== 'SIGNED_OUT') {
+                // Minimal user object if profile not ready, to prevent immediate logout if just signed up.
+                // This is tricky because we need role for redirection.
+                // For now, let's clear user if profile is missing, and rely on login flow to fetch it.
+                // If it's a fresh sign up, the profile will be created by the trigger.
+                // If it's a login, the profile MUST exist.
              } else {
                 setUser(null);
              }
           }
         } else { 
-          // console.log("[AuthContext] No Supabase user in session.");
           setUser(null);
         }
         setIsLoading(false);
       }
     );
 
-    // Ensure authListener and its data.subscription exist before trying to unsubscribe
     return () => {
       if (authListener && authListener.subscription) {
         authListener.subscription.unsubscribe();
-        // console.log("[AuthContext] Unsubscribed from onAuthStateChange.");
-      } else {
-        // console.warn("[AuthContext] Could not unsubscribe, authListener or subscription missing.");
       }
     };
   }, [router, pathname]);
@@ -95,28 +92,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (credentials: LoginCredentials) => {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: credentials.email,
+
+    // 1. Fetch profile by username to get the email
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('username', credentials.username)
+      .single();
+
+    if (profileError || !profile || !profile.email) {
+      console.error('Login error - profile not found for username or no email associated:', credentials.username, profileError);
+      setIsLoading(false);
+      return { success: false, error: { message: 'Invalid username or password.' } };
+    }
+
+    // 2. Use the fetched email to sign in with password
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: profile.email, // Use the email found from the profile
       password: credentials.password!,
     });
+    
     setIsLoading(false);
-    if (error) {
-      console.error('Login error:', error);
-      return { success: false, error };
+    if (signInError) {
+      console.error('Login error - signInWithPassword failed:', signInError);
+      // Supabase often returns a generic "Invalid login credentials" for security.
+      return { success: false, error: { message: 'Invalid username or password.' } };
     }
+    // onAuthStateChange will handle setting the user and redirecting
     return { success: true };
   };
 
   const signUp = async (credentials: SignUpCredentials) => {
     setIsLoading(true);
     const { data: signUpData, error } = await supabase.auth.signUp({
-      email: credentials.email,
+      email: credentials.email, // Sign up still requires email for Supabase Auth user
       password: credentials.password!,
       options: {
         data: { 
           username: credentials.username,
           name: credentials.name,
           role: credentials.role,
+          // hints_remaining will be set by the SQL trigger if role is student
         },
       },
     });
@@ -125,9 +141,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Sign up error:', error);
       return { success: false, error };
     }
+    // Check if user already exists (identities array is empty in this case for email/password)
     if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
-        return { success: true, error: { message: "User already exists. If unconfirmed, a new confirmation email has been sent." } };
+        // This case means the user likely exists but might be unconfirmed.
+        // Supabase would have resent a confirmation email if "Confirm email" is enabled.
+        return { success: true, error: { message: "User already exists or requires confirmation. If unconfirmed, a new confirmation email may have been sent." } };
     }
+    // On successful new user creation, onAuthStateChange will pick them up.
     return { success: true };
   };
 
@@ -161,4 +181,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
