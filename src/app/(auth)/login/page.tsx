@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -14,11 +13,11 @@ import type { LoginCredentials } from '@/types';
 
 
 export default function LoginPage() {
-  const [username, setUsername] = useState(''); // Changed from email to username
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   
   const { login, isLoading } = useAuth();
-  const router = useRouter();
+  const router = useRouter(); // Keep router for potential future use, though AuthContext handles redirection
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,20 +25,25 @@ export default function LoginPage() {
 
     if (!username || !password) {
       toast({
-        title: "Login Failed",
-        description: "Please enter both username and password.", // Updated message
+        title: "Вход не удался",
+        description: "Пожалуйста, введите логин и пароль.",
         variant: "destructive",
       });
       return;
     }
-    const credentials: LoginCredentials = { username, password }; // Use username
-    const { success, error } = await login(credentials);
+    const credentials: LoginCredentials = { username, password };
+    const { success, error } = await login(credentials); // AuthContext login now uses mock data
+    
     if (success) {
       // AuthProvider handles redirection
+      toast({
+        title: "Вход выполнен успешно!",
+        description: `Добро пожаловать, ${username}!`,
+      });
     } else {
       toast({
-        title: "Login Failed",
-        description: error?.message || "Invalid username or password.", // Updated message
+        title: "Вход не удался",
+        description: error?.message || "Неверный логин или пароль.",
         variant: "destructive",
       });
     }
@@ -54,26 +58,26 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-3xl font-headline">EnglishFamily</CardTitle>
           <CardDescription>
-            Welcome! Please login to continue.
+            Добро пожаловать! Пожалуйста, войдите, чтобы продолжить.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="username">Username</Label> {/* Changed from Email to Username */}
+              <Label htmlFor="username">Логин</Label>
               <Input
-                id="username" // Changed from email
-                type="text" // Changed from email
+                id="username"
+                type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="your_username" // Changed placeholder
+                placeholder="ваш_логин"
                 required
                 className="text-base"
               />
             </div>
             
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Пароль</Label>
               <Input
                 id="password"
                 type="password"
@@ -86,14 +90,15 @@ export default function LoginPage() {
             </div>
             
             <Button type="submit" className="w-full text-lg py-3" disabled={isLoading}>
-              {isLoading ? 'Logging In...' : 'Login'}
+              {isLoading ? 'Вход...' : 'Войти'}
               <LogIn className="ml-2 h-5 w-5" />
             </Button>
           </form>
         </CardContent>
+        {/* Removed Sign Up link as per previous user request to disable it */}
         <CardFooter className="flex flex-col items-center text-sm text-muted-foreground">
-          <p className="mt-2 text-center">
-            Enter your credentials to continue.
+           <p className="mt-2 text-center">
+            Введите свои учетные данные для продолжения.
           </p>
         </CardFooter>
       </Card>

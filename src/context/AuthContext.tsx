@@ -1,9 +1,9 @@
+
 "use client";
 
 import type { User, Student, Teacher, SignUpCredentials, LoginCredentials } from '@/types';
-import type { Profile } from '@/types/supabase';
-import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User as SupabaseUser, Subscription } from '@supabase/supabase-js';
+// Removed Supabase specific imports: Profile, supabase, AuthChangeEvent, Session, SupabaseUser, Subscription
+import { mockUsers } from '@/lib/mock-data'; // Using mock users for authentication
 import { useRouter, usePathname } from 'next/navigation';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -23,140 +23,61 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Will be set to false quickly
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session: Session | null) => {
-        setIsLoading(true);
-        const supabaseAuthUser = session?.user ?? null;
+    // No Supabase auth listener needed.
+    // If we wanted to persist mock login across reloads (e.g. via localStorage),
+    // we'd do that here. For now, simple logout on refresh.
+    setIsLoading(false); // App is ready immediately
+     // Check if user is not logged in and not on login page, redirect to login
+    if (!user && pathname !== '/login') {
+        // router.replace('/login'); // This might be too aggressive, let pages handle their own redirects if needed
+    }
 
-        if (supabaseAuthUser) {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', supabaseAuthUser.id)
-            .single();
-
-          if (error && error.code !== 'PGRST116') { 
-            console.error('[AuthContext] Error fetching profile:', error);
-            setUser(null);
-          } else if (profile) {
-            const appUser: User = {
-              id: supabaseAuthUser.id,
-              email: supabaseAuthUser.email, // email still stored on user object from auth
-              username: profile.username || '',
-              name: profile.name || '',
-              role: profile.role as 'student' | 'teacher',
-              ...(profile.role === 'student' && { hintsRemaining: profile.hints_remaining ?? 0 }),
-            };
-            setUser(appUser);
-            
-            if (pathname === '/login' || pathname === '/') {
-                 if (appUser.role === 'teacher') {
-                    router.replace('/teacher/dashboard');
-                } else {
-                    router.replace('/student/dashboard');
-                }
-            }
-          } else {
-             // Profile might not exist yet if user just signed up and trigger hasn't run / finished
-             // Or if invited user hasn't set password and confirmed.
-             console.warn("[AuthContext] Profile not found for user (or not yet created):", supabaseAuthUser.id, "Event:", event);
-             if (event !== 'USER_DELETED' && event !== 'SIGNED_OUT') {
-                // Minimal user object if profile not ready, to prevent immediate logout if just signed up.
-                // This is tricky because we need role for redirection.
-                // For now, let's clear user if profile is missing, and rely on login flow to fetch it.
-                // If it's a fresh sign up, the profile will be created by the trigger.
-                // If it's a login, the profile MUST exist.
-             } else {
-                setUser(null);
-             }
-          }
-        } else { 
-          setUser(null);
-        }
-        setIsLoading(false);
-      }
-    );
-
-    return () => {
-      if (authListener && authListener.subscription) {
-        authListener.subscription.unsubscribe();
-      }
-    };
-  }, [router, pathname]);
+  }, [user, pathname, router]);
 
 
   const login = async (credentials: LoginCredentials) => {
     setIsLoading(true);
+    console.log("[AuthContext - Mock] Attempting login with username:", credentials.username);
 
-    // 1. Fetch profile by username to get the email
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('username', credentials.username)
-      .single();
+    const foundUser = mockUsers.find(
+      (u) => u.username === credentials.username && u.password === credentials.password
+    );
 
-    if (profileError || !profile || !profile.email) {
-      console.error('Login error - profile not found for username or no email associated:', credentials.username, profileError);
+    if (foundUser) {
+      console.log("[AuthContext - Mock] User found:", foundUser.name, "Role:", foundUser.role);
+      setUser(foundUser);
       setIsLoading(false);
-      return { success: false, error: { message: 'Invalid username or password.' } };
+      if (foundUser.role === 'teacher') {
+        router.replace('/teacher/dashboard');
+      } else {
+        router.replace('/student/dashboard');
+      }
+      return { success: true };
+    } else {
+      console.log("[AuthContext - Mock] User not found or password incorrect for username:", credentials.username);
+      setUser(null);
+      setIsLoading(false);
+      return { success: false, error: { message: "Неверный логин или пароль." } };
     }
-
-    // 2. Use the fetched email to sign in with password
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: profile.email, // Use the email found from the profile
-      password: credentials.password!,
-    });
-    
-    setIsLoading(false);
-    if (signInError) {
-      console.error('Login error - signInWithPassword failed:', signInError);
-      // Supabase often returns a generic "Invalid login credentials" for security.
-      return { success: false, error: { message: 'Invalid username or password.' } };
-    }
-    // onAuthStateChange will handle setting the user and redirecting
-    return { success: true };
   };
 
   const signUp = async (credentials: SignUpCredentials) => {
-    setIsLoading(true);
-    const { data: signUpData, error } = await supabase.auth.signUp({
-      email: credentials.email, // Sign up still requires email for Supabase Auth user
-      password: credentials.password!,
-      options: {
-        data: { 
-          username: credentials.username,
-          name: credentials.name,
-          role: credentials.role,
-          // hints_remaining will be set by the SQL trigger if role is student
-        },
-      },
-    });
-    setIsLoading(false);
-    if (error) {
-      console.error('Sign up error:', error);
-      return { success: false, error };
-    }
-    // Check if user already exists (identities array is empty in this case for email/password)
-    if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
-        // This case means the user likely exists but might be unconfirmed.
-        // Supabase would have resent a confirmation email if "Confirm email" is enabled.
-        return { success: true, error: { message: "User already exists or requires confirmation. If unconfirmed, a new confirmation email may have been sent." } };
-    }
-    // On successful new user creation, onAuthStateChange will pick them up.
-    return { success: true };
+    // Sign up via UI is effectively disabled as per previous requests.
+    // If it were enabled, it would add to mockUsers (not persistent).
+    console.warn("[AuthContext - Mock] signUp called, but UI sign up should be disabled.");
+    return { success: false, error: { message: "Регистрация отключена." } };
   };
 
 
   const logout = async () => {
     setIsLoading(true);
-    await supabase.auth.signOut();
-    setUser(null); 
-    router.push('/login'); 
+    setUser(null);
+    router.replace('/login');
     setIsLoading(false);
   };
 
@@ -181,3 +102,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
